@@ -111,7 +111,7 @@
           "ERROR": "Failed to update audio transcription setting"
         }
       },
-      "DELETED_MESSAGE_CONTENT": {
+"DELETED_MESSAGE_CONTENT": {
         "TITLE": "Show deleted message content",
         "NOTE": "When a WhatsApp message is deleted, keep the original content visible in the conversation and only mark it as deleted.",
         "NOTICE": "Message deleted",
