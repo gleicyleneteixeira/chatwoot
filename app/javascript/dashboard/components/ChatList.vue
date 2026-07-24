@@ -95,6 +95,7 @@ const chatLists = useMapGetter('getFilteredConversations');
 const mineChatsList = useMapGetter('getMineChats');
 const allChatList = useMapGetter('getAllStatusChats');
 const unAssignedChatsList = useMapGetter('getUnAssignedChats');
+const waitingChatsList = useMapGetter('getWaitingChats');
 const groupChatsList = useMapGetter('getGroupChats');
 const participatingChatsList = useMapGetter('getParticipatingChats');
 const chatListLoading = useMapGetter('getChatListLoadingStatus');
@@ -215,6 +216,20 @@ const userPermissions = computed(() => {
   return getUserPermissions(currentUser.value, currentAccountId.value);
 });
 
+const filteredWaitingCount = computed(() => {
+  const filters = {
+    assigneeType: wootConstants.ASSIGNEE_TYPE.WAITING,
+    status: activeStatus.value,
+    sortBy: activeSortBy.value,
+    page: 1,
+    inboxId: props.conversationInbox || undefined,
+    labels: props.label ? [props.label] : undefined,
+    teamId: props.teamId || undefined,
+    conversationType: props.conversationType || undefined,
+  };
+  return waitingChatsList.value(filters).length;
+});
+
 const assigneeTabItems = computed(() => {
   const items = filterItemsByPermission(
     ASSIGNEE_TYPE_TAB_PERMISSIONS,
@@ -233,6 +248,11 @@ const assigneeTabItems = computed(() => {
     return true;
   });
 
+  const getCount = (key, countKey) =>
+    key === 'waiting'
+      ? filteredWaitingCount.value
+      : conversationStats.value[countKey] || 0;
+
   if (isWaitingConversationsDefaultEnabled.value) {
     const all = items.find(i => i.key === 'all');
     const waiting = items.find(i => i.key === 'waiting');
@@ -244,14 +264,14 @@ const assigneeTabItems = computed(() => {
     return reordered.map(({ key, count: countKey }) => ({
       key,
       name: t(`CHAT_LIST.ASSIGNEE_TYPE_TABS.${key}`),
-      count: conversationStats.value[countKey] || 0,
+      count: getCount(key, countKey),
     }));
   }
 
   return items.map(({ key, count: countKey }) => ({
     key,
     name: t(`CHAT_LIST.ASSIGNEE_TYPE_TABS.${key}`),
-    count: conversationStats.value[countKey] || 0,
+    count: getCount(key, countKey),
   }));
 });
 
@@ -428,7 +448,7 @@ const conversationList = computed(() => {
     } else if (
       activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.WAITING
     ) {
-      localConversationList = [...allChatList.value(filters)];
+      localConversationList = [...waitingChatsList.value(filters)];
     } else if (
       activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.INTERNAL
     ) {
@@ -714,9 +734,9 @@ function updateAssigneeTab(selectedTab) {
     resetBulkActions();
     emitter.emit('clearSearchInput');
     activeAssigneeTab.value = selectedTab;
-    if (!currentPage.value) {
-      fetchConversations();
-    }
+    store.dispatch('conversationPage/reset');
+    store.dispatch('emptyAllConversations');
+    fetchConversations();
   }
 }
 
@@ -985,6 +1005,46 @@ watch(chatLists, () => {
 watch(conversationFilters, (newVal, oldVal) => {
   if (newVal !== oldVal) {
     store.dispatch('updateChatListFilters', newVal);
+  }
+});
+
+const isInitialLoad = ref(true);
+
+const selectDefaultTabBasedOnHierarchy = () => {
+  const conversations = store.getters.getAllConversations || [];
+  const currentUserId = currentUser.value?.id;
+
+  // Filter open status conversations matching standard activeStatus
+  const openConversations = conversations.filter(
+    c => c.status === wootConstants.STATUS_TYPE.OPEN
+  );
+
+  const isUnattended = c => !c.first_reply_created_at;
+
+  // 1. Any Unattended ("Não atendidas") conversations (whether mine or unassigned)
+  const hasAnyUnattended = openConversations.some(isUnattended);
+
+  if (hasAnyUnattended) {
+    updateAssigneeTab(wootConstants.ASSIGNEE_TYPE.WAITING);
+    return;
+  }
+
+  // 2. Unassigned ("Não atribuídas") conversations (new clients in general)
+  const hasAnyUnassigned = openConversations.some(c => !c.meta?.assignee);
+
+  if (hasAnyUnassigned) {
+    updateAssigneeTab(wootConstants.ASSIGNEE_TYPE.UNASSIGNED);
+    return;
+  }
+
+  // 3. Fallback to Mine ("Minhas")
+  updateAssigneeTab(wootConstants.ASSIGNEE_TYPE.ME);
+};
+
+watch(chatListLoading, isLoading => {
+  if (!isLoading && isInitialLoad.value) {
+    selectDefaultTabBasedOnHierarchy();
+    isInitialLoad.value = false;
   }
 });
 </script>
