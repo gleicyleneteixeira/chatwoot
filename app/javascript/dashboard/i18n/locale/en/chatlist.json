@@ -15,10 +15,11 @@
     },
     "FILTER_ALL": "All",
     "ASSIGNEE_TYPE_TABS": {
+      "all": "All",
       "waiting": "Waiting",
+      "answered": "Answered",
       "me": "Mine",
       "unassigned": "Unassigned",
-      "all": "All",
       "groups": "Groups",
       "internal": "Internal Chat"
     },

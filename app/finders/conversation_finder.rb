@@ -41,7 +41,7 @@ class ConversationFinder
   def perform
     set_up
 
-    mine_count, assigned_count, unassigned_count, waiting_count, group_count, all_count, internal_count =
+    mine_count, assigned_count, unassigned_count, waiting_count, group_count, all_count, internal_count, answered_count =
       set_count_for_all_conversations
 
     filter_by_assignee_type
@@ -56,7 +56,8 @@ class ConversationFinder
         waiting_count: waiting_count,
         group_count: group_count,
         internal_count: internal_count,
-        all_count: all_count
+        all_count: all_count,
+        answered_count: answered_count
       }
     }
   end
@@ -64,7 +65,7 @@ class ConversationFinder
   def perform_meta_only
     set_up
 
-    mine_count, assigned_count, unassigned_count, waiting_count, group_count, all_count, internal_count =
+    mine_count, assigned_count, unassigned_count, waiting_count, group_count, all_count, internal_count, answered_count =
       set_count_for_all_conversations
 
     {
@@ -75,7 +76,8 @@ class ConversationFinder
         waiting_count: waiting_count,
         group_count: group_count,
         internal_count: internal_count,
-        all_count: all_count
+        all_count: all_count,
+        answered_count: answered_count
       }
     }
   end
@@ -139,6 +141,8 @@ class ConversationFinder
       @conversations = @conversations.unassigned.non_group_conversations
     when 'waiting'
       @conversations = waiting_conversations
+    when 'answered'
+      @conversations = @conversations.where.not(first_reply_created_at: nil)
     when 'groups'
       @conversations = @conversations.group_conversations
     when 'assigned'
@@ -245,13 +249,24 @@ class ConversationFinder
       Arel.sql('COUNT(*) FILTER (WHERE "conversations"."group" = FALSE AND assignee_id IS NULL)'),
       Arel.sql("COUNT(*) FILTER (WHERE #{waiting_filter})"),
       Arel.sql('COUNT(*) FILTER (WHERE "conversations"."group" = TRUE)'),
-      Arel.sql('COUNT(*)')
+      Arel.sql('COUNT(*)'),
+      Arel.sql('COUNT(*) FILTER (WHERE first_reply_created_at IS NOT NULL)')
     )
-    counts = counts || [0, 0, 0, 0, 0, 0]
-    counts + [internal_scope.count]
+    counts = counts || [0, 0, 0, 0, 0, 0, 0]
+    [
+      counts[0], # mine
+      counts[1], # assigned
+      counts[2], # unassigned
+      counts[3], # waiting
+      counts[4], # group
+      counts[5], # all
+      internal_scope.count, # internal
+      counts[6]  # answered
+    ]
   end
 
   def legacy_count_for_all_conversations(count_scope, internal_scope, waiting_scope)
+    answered_scope = count_scope.where.not(first_reply_created_at: nil)
     [
       count_scope.assigned_to(current_user).count,
       count_scope.assigned.count,
@@ -259,7 +274,8 @@ class ConversationFinder
       waiting_scope.count,
       count_scope.group_conversations.count,
       count_scope.count,
-      internal_scope.count
+      internal_scope.count,
+      answered_scope.count
     ]
   end
 

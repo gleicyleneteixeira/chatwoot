@@ -95,6 +95,8 @@ const chatLists = useMapGetter('getFilteredConversations');
 const mineChatsList = useMapGetter('getMineChats');
 const allChatList = useMapGetter('getAllStatusChats');
 const unAssignedChatsList = useMapGetter('getUnAssignedChats');
+const waitingChatsList = useMapGetter('getWaitingChats');
+const answeredChatsList = useMapGetter('getAnsweredChats');
 const groupChatsList = useMapGetter('getGroupChats');
 const participatingChatsList = useMapGetter('getParticipatingChats');
 const chatListLoading = useMapGetter('getChatListLoadingStatus');
@@ -408,6 +410,10 @@ const conversationList = computed(() => {
       activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.UNASSIGNED
     ) {
       localConversationList = [...unAssignedChatsList.value(filters)];
+    } else if (
+      activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.ANSWERED
+    ) {
+      localConversationList = [...answeredChatsList.value(filters)];
     } else if (activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.GROUPS) {
       localConversationList = [...groupChatsList.value(filters)];
     } else if (
@@ -473,10 +479,7 @@ function setFiltersFromUISettings() {
   )
     ? orderBy
     : wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC;
-  activeAssigneeTab.value =
-    isWaitingConversationsDefaultEnabled.value && !props.conversationType
-      ? wootConstants.ASSIGNEE_TYPE.WAITING
-      : wootConstants.ASSIGNEE_TYPE.ME;
+  activeAssigneeTab.value = wootConstants.ASSIGNEE_TYPE.ME;
 }
 
 function emitConversationLoaded() {

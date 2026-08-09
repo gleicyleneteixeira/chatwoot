@@ -15,10 +15,11 @@
     },
     "FILTER_ALL": "Todos",
     "ASSIGNEE_TYPE_TABS": {
+      "all": "Todos",
       "waiting": "Aguardando",
+      "answered": "Respondidas",
       "me": "Minhas",
       "unassigned": "Não atribuídas",
-      "all": "Todos",
       "groups": "Grupos",
       "internal": "Chat interno"
     },
