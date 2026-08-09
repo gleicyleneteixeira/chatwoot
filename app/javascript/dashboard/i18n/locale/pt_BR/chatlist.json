@@ -17,6 +17,7 @@
     "ASSIGNEE_TYPE_TABS": {
       "all": "Todas",
       "waiting": "Não atendidas",
+      "answered": "Respondidas",
       "me": "Minhas",
       "unassigned": "Não atribuídas",
       "groups": "Grupos",

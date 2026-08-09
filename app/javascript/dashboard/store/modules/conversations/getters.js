@@ -134,6 +134,27 @@ const getters = {
       return isWaiting && shouldFilter;
     });
   },
+  getAnsweredChats: (_state, _, __, rootGetters) => activeFilters => {
+    const currentUser = rootGetters.getCurrentUser;
+    const currentUserId = rootGetters.getCurrentUser.id;
+    const currentAccountId = rootGetters.getCurrentAccountId;
+
+    const permissions = getUserPermissions(currentUser, currentAccountId);
+    const userRole = getUserRole(currentUser, currentAccountId);
+
+    return _state.allConversations.filter(conversation => {
+      const isAnswered = !!conversation.first_reply_created_at;
+      const shouldFilter = applyPageFilters(conversation, activeFilters);
+      const allowedForRole = applyRoleFilter(
+        conversation,
+        userRole,
+        permissions,
+        currentUserId
+      );
+
+      return isAnswered && shouldFilter && allowedForRole;
+    });
+  },
   getAllStatusChats: (_state, _, __, rootGetters) => activeFilters => {
     const currentUser = rootGetters.getCurrentUser;
     const currentUserId = rootGetters.getCurrentUser.id;
