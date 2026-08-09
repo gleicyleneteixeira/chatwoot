@@ -95,6 +95,8 @@ const chatLists = useMapGetter('getFilteredConversations');
 const mineChatsList = useMapGetter('getMineChats');
 const allChatList = useMapGetter('getAllStatusChats');
 const unAssignedChatsList = useMapGetter('getUnAssignedChats');
+const waitingChatsList = useMapGetter('getWaitingChats');
+const answeredChatsList = useMapGetter('getAnsweredChats');
 const groupChatsList = useMapGetter('getGroupChats');
 const participatingChatsList = useMapGetter('getParticipatingChats');
 const chatListLoading = useMapGetter('getChatListLoadingStatus');
@@ -396,12 +398,16 @@ const conversationList = computed(() => {
       activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.UNASSIGNED
     ) {
       localConversationList = [...unAssignedChatsList.value(filters)];
+    } else if (
+      activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.ANSWERED
+    ) {
+      localConversationList = [...answeredChatsList.value(filters)];
     } else if (activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.GROUPS) {
       localConversationList = [...groupChatsList.value(filters)];
     } else if (
       activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.WAITING
     ) {
-      localConversationList = [...allChatList.value(filters)];
+      localConversationList = [...waitingChatsList.value(filters)];
     } else if (
       activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.INTERNAL
     ) {
@@ -454,10 +460,7 @@ function setFiltersFromUISettings() {
   )
     ? orderBy
     : wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC;
-  activeAssigneeTab.value =
-    isWaitingConversationsDefaultEnabled.value && !props.conversationType
-      ? wootConstants.ASSIGNEE_TYPE.WAITING
-      : wootConstants.ASSIGNEE_TYPE.ME;
+  activeAssigneeTab.value = wootConstants.ASSIGNEE_TYPE.ME;
 }
 
 function emitConversationLoaded() {
@@ -679,9 +682,9 @@ function updateAssigneeTab(selectedTab) {
     resetBulkActions();
     emitter.emit('clearSearchInput');
     activeAssigneeTab.value = selectedTab;
-    if (!currentPage.value) {
-      fetchConversations();
-    }
+    store.dispatch('conversationPage/reset');
+    store.dispatch('emptyAllConversations');
+    fetchConversations();
   }
 }
 
@@ -950,6 +953,46 @@ watch(chatLists, () => {
 watch(conversationFilters, (newVal, oldVal) => {
   if (newVal !== oldVal) {
     store.dispatch('updateChatListFilters', newVal);
+  }
+});
+
+const isInitialLoad = ref(true);
+
+const selectDefaultTabBasedOnHierarchy = () => {
+  const conversations = store.getters.getAllConversations || [];
+  const currentUserId = currentUser.value?.id;
+
+  // Filter open status conversations matching standard activeStatus
+  const openConversations = conversations.filter(
+    c => c.status === wootConstants.STATUS_TYPE.OPEN
+  );
+
+  const isUnattended = c => !c.first_reply_created_at;
+
+  // 1. Any Unattended ("Não atendidas") conversations (whether mine or unassigned)
+  const hasAnyUnattended = openConversations.some(isUnattended);
+
+  if (hasAnyUnattended) {
+    updateAssigneeTab(wootConstants.ASSIGNEE_TYPE.WAITING);
+    return;
+  }
+
+  // 2. Unassigned ("Não atribuídas") conversations (new clients in general)
+  const hasAnyUnassigned = openConversations.some(c => !c.meta?.assignee);
+
+  if (hasAnyUnassigned) {
+    updateAssigneeTab(wootConstants.ASSIGNEE_TYPE.UNASSIGNED);
+    return;
+  }
+
+  // 3. Fallback to Mine ("Minhas")
+  updateAssigneeTab(wootConstants.ASSIGNEE_TYPE.ME);
+};
+
+watch(chatListLoading, isLoading => {
+  if (!isLoading && isInitialLoad.value) {
+    selectDefaultTabBasedOnHierarchy();
+    isInitialLoad.value = false;
   }
 });
 </script>
