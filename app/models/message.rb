@@ -380,11 +380,7 @@ class Message < ApplicationRecord
         REPLY_CREATED, Time.zone.now, waiting_since: conversation.waiting_since, message: self
       )
       conversation.update(waiting_since: nil)
-      return
     end
-
-    # Bot responses also clear waiting_since (simpler than checking on next customer message)
-    conversation.update(waiting_since: nil) if bot_response? && !preserve_waiting_since
   end
 
   def set_waiting_since_on_incoming_message

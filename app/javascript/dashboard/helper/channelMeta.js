@@ -1,7 +1,7 @@
 export const getChannelMeta = channelType => {
   const ch = (channelType || '').toLowerCase();
   if (ch.includes('whatsapp'))
-    return { icon: 'i-lucide-phone', color: 'text-emerald-500', name: 'WhatsApp' };
+    return { icon: 'i-ri-whatsapp-fill', color: 'text-emerald-500', name: 'WhatsApp' };
   if (ch.includes('email'))
     return { icon: 'i-lucide-mail', color: 'text-cyan-500', name: 'E-mail' };
   if (ch.includes('instagram'))

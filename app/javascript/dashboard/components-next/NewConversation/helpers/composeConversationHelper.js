@@ -244,13 +244,31 @@ export const searchContacts = async ({ query }) => {
   return result || [];
 };
 
+export const parsePhoneAndName = input => {
+  const trimmed = (input || '').trim();
+  const separator = trimmed.includes(';') ? ';' : trimmed.includes(',') ? ',' : null;
+
+  if (!separator) {
+    const phone = trimmed.replace(/[^0-9+]/g, '');
+    return { phone, name: phone };
+  }
+
+  const parts = trimmed.split(separator);
+  const phone = parts[0].replace(/[^0-9+]/g, '').trim();
+  const name = (parts[1] || '').trim() || phone;
+  return { phone, name };
+};
+
 export const createNewContact = async input => {
-  const payload = {
-    name: input.startsWith('+')
-      ? input.slice(1) // Remove the '+' prefix if it exists
-      : getCapitalizedNameFromEmail(input),
-    ...(input.startsWith('+') ? { phone_number: input } : { email: input }),
-  };
+  const { phone, name } = parsePhoneAndName(input);
+  const isPhone = input.startsWith('+') || /^\+?\d/.test(input.trim());
+
+  const payload = isPhone
+    ? { name, phone_number: phone }
+    : {
+        name: getCapitalizedNameFromEmail(input),
+        email: input,
+      };
 
   const {
     data: {

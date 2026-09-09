@@ -499,8 +499,14 @@ const menuItems = computed(() => {
       name: 'Kanban',
       label: 'Kanban',
       icon: 'i-lucide-layout-grid',
-      to: accountScopedRoute('kanban_dashboard'),
-      activeOn: ['kanban_dashboard'],
+      children: [
+        {
+          name: 'Funis',
+          label: 'Funis',
+          to: accountScopedRoute('kanban_dashboard'),
+          activeOn: ['kanban_dashboard'],
+        },
+      ],
     },
     {
       name: 'Contacts',

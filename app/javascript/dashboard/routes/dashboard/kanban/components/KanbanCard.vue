@@ -464,66 +464,6 @@ const openConversation = () => {
           </div>
         </div>
       </div>
-
-      <!-- Assignee Thumbnail on the Right (Image 1 Style) -->
-      <div class="shrink-0 flex items-center relative assignee-popover-trigger">
-        <div
-          class="cursor-pointer"
-          @click.stop="showAssigneePopover = !showAssigneePopover"
-        >
-          <Thumbnail
-            v-if="props.conversation.meta?.assignee"
-            :src="
-              props.conversation.meta?.assignee?.thumbnail ||
-              props.conversation.meta?.assignee?.avatar_url ||
-              ''
-            "
-            :username="props.conversation.meta?.assignee?.name || 'Agente'"
-            size="22px"
-            class="shrink-0 ring-2 ring-slate-950 rounded-full"
-            :title="props.conversation.meta?.assignee?.name"
-          />
-          <!-- Unassigned Placeholder -->
-          <div
-            v-else
-            class="size-[22px] rounded-full bg-slate-950 flex items-center justify-center border border-dashed border-slate-700 shrink-0 cursor-pointer hover:border-slate-500 transition-colors"
-            :title="t('KANBAN.CARD.NO_ASSIGNEE')"
-          >
-            <Icon icon="i-lucide-user-round" class="text-slate-600 size-3" />
-          </div>
-        </div>
-
-        <!-- Assignee popover -->
-        <div
-          v-if="showAssigneePopover"
-          class="absolute top-7 right-0 flex flex-col min-w-[140px] bg-slate-900 border border-slate-800 shadow-xl rounded-lg overflow-hidden py-1 z-30 animate-in fade-in slide-in-from-top-1"
-        >
-          <div
-            class="px-3 py-1.5 border-b border-slate-800 text-[10px] uppercase font-bold text-slate-500"
-          >
-            Atribuir para
-          </div>
-          <button
-            v-for="agent in filteredAgents"
-            :key="agent.id"
-            type="button"
-            class="px-3 py-1.5 text-xs text-left text-slate-300 hover:bg-slate-800 transition-colors flex items-center gap-2"
-            :class="{
-              'bg-emerald-500/10':
-                props.conversation.meta?.assignee?.id === agent.id,
-            }"
-            @click="handleAssign($event, agent.id)"
-          >
-            <Thumbnail
-              :src="agent.thumbnail"
-              :username="agent.name"
-              size="16px"
-              class="shrink-0 rounded-full"
-            />
-            <span class="truncate">{{ agent.name }}</span>
-          </button>
-        </div>
-      </div>
     </div>
 
     <!-- Message Snippet -->
@@ -627,6 +567,66 @@ const openConversation = () => {
       >
         <Icon :icon="formattedTimestamp.icon" class="size-3" />
         <span>{{ formattedTimestamp.text }}</span>
+      </div>
+
+      <!-- Assignee Thumbnail (Footer) -->
+      <div class="shrink-0 flex items-center relative assignee-popover-trigger">
+        <div
+          class="cursor-pointer"
+          @click.stop="showAssigneePopover = !showAssigneePopover"
+        >
+          <Thumbnail
+            v-if="props.conversation.meta?.assignee"
+            :src="
+              props.conversation.meta?.assignee?.thumbnail ||
+              props.conversation.meta?.assignee?.avatar_url ||
+              ''
+            "
+            :username="props.conversation.meta?.assignee?.name || 'Agente'"
+            size="22px"
+            class="shrink-0 ring-2 ring-slate-950 rounded-full"
+            :title="props.conversation.meta?.assignee?.name"
+          />
+          <!-- Unassigned Placeholder -->
+          <div
+            v-else
+            class="size-[22px] rounded-full bg-slate-950 flex items-center justify-center border border-dashed border-slate-700 shrink-0 cursor-pointer hover:border-slate-500 transition-colors"
+            :title="t('KANBAN.CARD.NO_ASSIGNEE')"
+          >
+            <Icon icon="i-lucide-user-round" class="text-slate-600 size-3" />
+          </div>
+        </div>
+
+        <!-- Assignee popover -->
+        <div
+          v-if="showAssigneePopover"
+          class="absolute bottom-7 right-0 flex flex-col min-w-[140px] bg-slate-900 border border-slate-800 shadow-xl rounded-lg overflow-hidden py-1 z-30 animate-in fade-in slide-in-from-bottom-1"
+        >
+          <div
+            class="px-3 py-1.5 border-b border-slate-800 text-[10px] uppercase font-bold text-slate-500"
+          >
+            Atribuir para
+          </div>
+          <button
+            v-for="agent in filteredAgents"
+            :key="agent.id"
+            type="button"
+            class="px-3 py-1.5 text-xs text-left text-slate-300 hover:bg-slate-800 transition-colors flex items-center gap-2"
+            :class="{
+              'bg-emerald-500/10':
+                props.conversation.meta?.assignee?.id === agent.id,
+            }"
+            @click="handleAssign($event, agent.id)"
+          >
+            <Thumbnail
+              :src="agent.thumbnail"
+              :username="agent.name"
+              size="16px"
+              class="shrink-0 rounded-full"
+            />
+            <span class="truncate">{{ agent.name }}</span>
+          </button>
+        </div>
       </div>
     </div>
 

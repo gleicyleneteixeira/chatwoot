@@ -111,10 +111,13 @@ const errorClass = computed(() => {
 });
 
 const handleInput = value => {
-  // Update input type based on whether input starts with '+'
-  // If it does, set input type to 'tel'
-  // Otherwise, set input type to 'email'
-  inputType.value = value.startsWith('+') ? INPUT_TYPES.TEL : INPUT_TYPES.EMAIL;
+  const trimmed = (value || '').trim();
+  const hasSeparator = trimmed.includes(';') || trimmed.includes(',');
+  const startsWithPlus = trimmed.startsWith('+');
+  const startsWithDigits = /^\d/.test(trimmed);
+  inputType.value = startsWithPlus || hasSeparator || startsWithDigits
+    ? INPUT_TYPES.TEL
+    : INPUT_TYPES.EMAIL;
   emit('searchContacts', value);
 };
 </script>
