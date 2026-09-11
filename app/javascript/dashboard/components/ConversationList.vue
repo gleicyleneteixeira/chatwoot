@@ -19,6 +19,9 @@ const props = defineProps({
   conversationType: { type: String, default: '' },
   showAssignee: { type: Boolean, default: false },
   isOnExpandedLayout: { type: Boolean, default: false },
+  showSeparator: { type: Boolean, default: false },
+  pendingConversations: { type: Array, default: () => [] },
+  answeredConversations: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits(['loadMore']);
@@ -63,7 +66,51 @@ defineExpose({ conversationListRef });
     class="flex-1 min-h-0 overflow-y-auto conversations-list"
     :class="{ '!overflow-hidden': isContextMenuOpen }"
   >
+    <template v-if="showSeparator">
+      <Virtualizer
+        ref="virtualListRef"
+        v-slot="{ item }"
+        :data="pendingConversations"
+        class="[&>div:has(+_div_.active)>*]:!border-n-surface-1 [&>div:has(+_div_.selected)>*]:!border-n-surface-1"
+      >
+        <ConversationItem
+          :source="item"
+          :label="label"
+          :team-id="teamId"
+          :folders-id="foldersId"
+          :conversation-type="conversationType"
+          :show-assignee="showAssignee"
+          :show-expanded="showExpandedCards"
+        />
+      </Virtualizer>
+      <div
+        v-if="pendingConversations.length > 0 && answeredConversations.length > 0"
+        class="flex items-center gap-2 px-4 py-2 bg-n-surface-2 border-y border-n-strong"
+      >
+        <div class="flex-1 h-px bg-n-slate-4"></div>
+        <span class="text-xs font-medium text-n-slate-11 whitespace-nowrap">
+          Respondidas / Em aguardo de retorno
+        </span>
+        <div class="flex-1 h-px bg-n-slate-4"></div>
+      </div>
+      <Virtualizer
+        v-slot="{ item }"
+        :data="answeredConversations"
+        class="[&>div:has(+_div_.active)>*]:!border-n-surface-1 [&>div:has(+_div_.selected)>*]:!border-n-surface-1"
+      >
+        <ConversationItem
+          :source="item"
+          :label="label"
+          :team-id="teamId"
+          :folders-id="foldersId"
+          :conversation-type="conversationType"
+          :show-assignee="showAssignee"
+          :show-expanded="showExpandedCards"
+        />
+      </Virtualizer>
+    </template>
     <Virtualizer
+      v-else
       ref="virtualListRef"
       v-slot="{ item }"
       :data="conversationList"

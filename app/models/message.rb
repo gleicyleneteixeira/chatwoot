@@ -379,8 +379,10 @@ class Message < ApplicationRecord
       Rails.configuration.dispatcher.dispatch(
         REPLY_CREATED, Time.zone.now, waiting_since: conversation.waiting_since, message: self
       )
-      conversation.update(waiting_since: nil)
     end
+    # Clear waiting_since for ALL outgoing messages (human, bot, automation)
+    # Green indicator should disappear whenever the last message is outgoing
+    conversation.update(waiting_since: nil)
   end
 
   def set_waiting_since_on_incoming_message

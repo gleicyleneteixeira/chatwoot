@@ -17,13 +17,13 @@ const props = defineProps({
 const emit = defineEmits(['chatTabChange']);
 
 const HORIZONTAL_TAB_ORDER = [
-  wootConstants.ASSIGNEE_TYPE.ME,
   wootConstants.ASSIGNEE_TYPE.WAITING,
+  wootConstants.ASSIGNEE_TYPE.ME,
   wootConstants.ASSIGNEE_TYPE.UNASSIGNED,
   wootConstants.ASSIGNEE_TYPE.ANSWERED,
+  wootConstants.ASSIGNEE_TYPE.ALL,
   wootConstants.ASSIGNEE_TYPE.MENTION,
   wootConstants.ASSIGNEE_TYPE.PARTICIPATING,
-  wootConstants.ASSIGNEE_TYPE.ALL,
   wootConstants.ASSIGNEE_TYPE.GROUPS,
   wootConstants.ASSIGNEE_TYPE.INTERNAL,
 ];

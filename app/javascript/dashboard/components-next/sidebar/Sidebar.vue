@@ -897,7 +897,7 @@ const menuItems = computed(() => {
         </template>
       </div>
       <div
-        class="flex gap-2 min-w-0"
+        class="flex gap-2 min-w-0 overflow-hidden"
         :class="isEffectivelyCollapsed ? 'flex-col items-center' : 'px-2'"
       >
         <RouterLink
@@ -925,7 +925,7 @@ const menuItems = computed(() => {
           <span class="i-lucide-search size-4 text-n-slate-11" />
         </RouterLink>
         <div
-          class="flex gap-1 flex-shrink-0"
+          class="flex gap-1"
           :class="isEffectivelyCollapsed ? 'flex-col' : ''"
         >
           <ComposeConversation align="start">
@@ -934,7 +934,7 @@ const menuItems = computed(() => {
                 icon="i-lucide-pen-line"
                 color="slate"
                 size="sm"
-                class="dark:hover:!bg-n-slate-9/30"
+                class="dark:hover:!bg-n-slate-9/30 min-w-0"
                 :class="[
                   isEffectivelyCollapsed
                     ? '!size-8 !outline-n-weak !text-n-slate-11'

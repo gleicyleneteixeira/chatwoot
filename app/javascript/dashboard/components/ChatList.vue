@@ -82,7 +82,7 @@ const resolveAttributesModalRef = ref(null);
 const conversationLayout = ref(
   uiSettings.value.conversation_layout_type || wootConstants.LAYOUT_TYPES.CONDENSED
 );
-const activeAssigneeTab = ref(wootConstants.ASSIGNEE_TYPE.ME);
+  const activeAssigneeTab = ref(wootConstants.ASSIGNEE_TYPE.WAITING);
 const activeStatus = ref(wootConstants.STATUS_TYPE.OPEN);
 const activeSortBy = ref(wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC);
 const showAdvancedFilters = ref(false);
@@ -248,6 +248,9 @@ const assigneeTabItems = computed(() => {
         return false;
       }
       if (hideUnassignedForAgents.value && key === 'unassigned') {
+        return false;
+      }
+      if (isUnifiedListViewMode.value && (key === 'waiting' || key === 'answered')) {
         return false;
       }
       return true;
@@ -520,6 +523,20 @@ const isHorizontalLayout = computed(() => {
   return conversationLayout.value === wootConstants.LAYOUT_TYPES.HORIZONTAL_TOP;
 });
 
+const isUnifiedListViewMode = computed(() => {
+  return uiSettings.value.conversation_list_view_mode === 'unified_list';
+});
+
+const pendingConversations = computed(() => {
+  if (!isUnifiedListViewMode.value) return [];
+  return conversationList.value.filter(c => !!c.waiting_since);
+});
+
+const answeredConversations = computed(() => {
+  if (!isUnifiedListViewMode.value) return [];
+  return conversationList.value.filter(c => !c.waiting_since);
+});
+
 // ---------------------- Methods -----------------------
 function toggleLayout(newLayout) {
   conversationLayout.value = newLayout;
@@ -534,7 +551,7 @@ function setFiltersFromUISettings() {
   )
     ? orderBy
     : wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC;
-  if (isWaitingConversationsDefaultEnabled.value && !props.conversationType) {
+  if (!props.conversationType) {
     activeAssigneeTab.value = wootConstants.ASSIGNEE_TYPE.WAITING;
   } else {
     activeAssigneeTab.value = wootConstants.ASSIGNEE_TYPE.ME;
@@ -1130,6 +1147,9 @@ watch(conversationFilters, (newVal, oldVal) => {
       :conversation-type="conversationType"
       :show-assignee="showAssigneeInConversationCard"
       :is-on-expanded-layout="isOnExpandedLayout"
+      :show-separator="isUnifiedListViewMode"
+      :pending-conversations="pendingConversations"
+      :answered-conversations="answeredConversations"
       @load-more="loadMoreConversations"
     />
     <Dialog
