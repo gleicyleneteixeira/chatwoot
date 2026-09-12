@@ -128,6 +128,14 @@
           "ERROR": "Failed to update the Mine tab preference"
         }
       },
+      "CONVERSATION_LIST_VIEW_MODE": {
+        "TITLE": "Conversation list view mode",
+        "DESCRIPTION": "Choose how conversations are displayed in the chat list. Separate tabs shows waiting and answered conversations in different tabs. Unified list shows them in a single list with a visual separator.",
+        "API": {
+          "SUCCESS": "Conversation list view mode updated successfully",
+          "ERROR": "Failed to update conversation list view mode"
+        }
+      },
       "MESSAGE_COMPOSER": {
         "TITLE": "Use classic message editor",
         "NOTE": "Enable this to return to the previous editor. When disabled, ViperChat uses the new compact editor for chat channels; email inboxes keep the classic editor.",

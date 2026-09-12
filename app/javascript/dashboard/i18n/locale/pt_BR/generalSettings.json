@@ -128,6 +128,14 @@
           "ERROR": "Falha ao atualizar a preferência da aba Minhas"
         }
       },
+      "CONVERSATION_LIST_VIEW_MODE": {
+        "TITLE": "Modo de exibição da lista de conversas",
+        "DESCRIPTION": "Escolha como as conversas são exibidas na lista de conversas. Abas separadas mostra conversas aguardando e respondidas em abas diferentes. Lista unificada mostra todas em uma única lista com um separador visual.",
+        "API": {
+          "SUCCESS": "Modo de exibição da lista de conversas atualizado com sucesso",
+          "ERROR": "Falha ao atualizar o modo de exibição da lista de conversas"
+        }
+      },
       "MESSAGE_COMPOSER": {
         "TITLE": "Usar editor clássico de mensagens",
         "NOTE": "Ative para voltar ao editor anterior. Desativado, o ViperChat usa o novo editor compacto para canais de conversa; caixas de e-mail continuam usando o editor clássico.",
