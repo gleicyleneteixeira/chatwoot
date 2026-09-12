@@ -524,7 +524,8 @@ const isHorizontalLayout = computed(() => {
 });
 
 const isUnifiedListViewMode = computed(() => {
-  return uiSettings.value.conversation_list_view_mode === 'unified_list';
+  const account = getAccountFn.value(currentAccountId.value);
+  return account.settings?.conversation_list_view_mode === 'unified_list';
 });
 
 const pendingConversations = computed(() => {
