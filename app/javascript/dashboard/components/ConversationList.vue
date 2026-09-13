@@ -57,6 +57,22 @@ const loadMoreConversations = () => {
 
 provide('toggleContextMenu', onContextMenuToggle);
 
+const SEPARATOR_MARKER = { id: '__separator__', _isSeparator: true };
+
+const displayItems = computed(() => {
+  if (!props.showSeparator) {
+    return props.conversationList;
+  }
+  const items = [...props.pendingConversations];
+  if (items.length > 0 && props.answeredConversations.length > 0) {
+    items.push(SEPARATOR_MARKER);
+  }
+  for (const c of props.answeredConversations) {
+    items.push(c);
+  }
+  return items;
+});
+
 defineExpose({ conversationListRef });
 </script>
 
@@ -66,26 +82,16 @@ defineExpose({ conversationListRef });
     class="flex-1 min-h-0 overflow-y-auto conversations-list"
     :class="{ '!overflow-hidden': isContextMenuOpen }"
   >
-    <template v-if="showSeparator">
-      <Virtualizer
-        ref="virtualListRef"
-        v-slot="{ item }"
-        :data="pendingConversations"
-        class="[&>div:has(+_div_.active)>*]:!border-n-surface-1 [&>div:has(+_div_.selected)>*]:!border-n-surface-1"
-      >
-        <ConversationItem
-          :source="item"
-          :label="label"
-          :team-id="teamId"
-          :folders-id="foldersId"
-          :conversation-type="conversationType"
-          :show-assignee="showAssignee"
-          :show-expanded="showExpandedCards"
-        />
-      </Virtualizer>
+    <Virtualizer
+      ref="virtualListRef"
+      v-slot="{ item }"
+      :data="displayItems"
+      :recurse="true"
+      class="[&>div:has(+_div_.active)>*]:!border-n-surface-1 [&>div:has(+_div_.selected)>*]:!border-n-surface-1"
+    >
       <div
-        v-if="pendingConversations.length > 0 && answeredConversations.length > 0"
-        class="flex items-center gap-2 px-4 py-2 bg-n-surface-2 border-y border-n-strong"
+        v-if="item._isSeparator"
+        class="flex items-center gap-2 px-4 py-2 bg-n-surface-2 border-y border-n-strong sticky top-0 z-10"
       >
         <div class="flex-1 h-px bg-n-slate-4"></div>
         <span class="text-xs font-medium text-n-slate-11 whitespace-nowrap">
@@ -93,30 +99,8 @@ defineExpose({ conversationListRef });
         </span>
         <div class="flex-1 h-px bg-n-slate-4"></div>
       </div>
-      <Virtualizer
-        v-slot="{ item }"
-        :data="answeredConversations"
-        class="[&>div:has(+_div_.active)>*]:!border-n-surface-1 [&>div:has(+_div_.selected)>*]:!border-n-surface-1"
-      >
-        <ConversationItem
-          :source="item"
-          :label="label"
-          :team-id="teamId"
-          :folders-id="foldersId"
-          :conversation-type="conversationType"
-          :show-assignee="showAssignee"
-          :show-expanded="showExpandedCards"
-        />
-      </Virtualizer>
-    </template>
-    <Virtualizer
-      v-else
-      ref="virtualListRef"
-      v-slot="{ item }"
-      :data="conversationList"
-      class="[&>div:has(+_div_.active)>*]:!border-n-surface-1 [&>div:has(+_div_.selected)>*]:!border-n-surface-1"
-    >
       <ConversationItem
+        v-else
         :source="item"
         :label="label"
         :team-id="teamId"
