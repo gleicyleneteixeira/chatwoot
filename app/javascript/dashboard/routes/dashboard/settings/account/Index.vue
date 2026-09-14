@@ -21,6 +21,7 @@ import DeletedMessageContent from './components/DeletedMessageContent.vue';
 import LegacyMessageComposer from './components/LegacyMessageComposer.vue';
 import TeamConversationsInMine from './components/TeamConversationsInMine.vue';
 import ConversationListViewMode from './components/ConversationListViewMode.vue';
+import LastAssigneeAsParticipant from './components/LastAssigneeAsParticipant.vue';
 import SectionLayout from './components/SectionLayout.vue';
 
 export default {
@@ -35,6 +36,7 @@ export default {
     LegacyMessageComposer,
     TeamConversationsInMine,
     ConversationListViewMode,
+    LastAssigneeAsParticipant,
     SectionLayout,
     SwitchControl,
     WithLabel,
@@ -280,6 +282,7 @@ export default {
     <DeletedMessageContent />
     <TeamConversationsInMine />
     <ConversationListViewMode />
+    <LastAssigneeAsParticipant />
     <LegacyMessageComposer />
     <SectionLayout
       with-border

@@ -7,6 +7,7 @@ import BackButton from '../BackButton.vue';
 import InboxName from '../InboxName.vue';
 import MoreActions from './MoreActions.vue';
 import Avatar from 'next/avatar/Avatar.vue';
+import AvatarPreview from 'dashboard/components-next/avatar/AvatarPreview.vue';
 import SLACardLabel from './components/SLACardLabel.vue';
 import wootConstants from 'dashboard/constants/globals';
 import { conversationListPageURL } from 'dashboard/helper/URLHelper';
@@ -81,7 +82,7 @@ const conversationAvatarSrc = computed(() => {
   return (
     props.chat.group_picture ||
     props.chat.additional_attributes?.group_picture ||
-    currentContact.value?.thumbnail
+    ''
   );
 });
 
@@ -134,14 +135,19 @@ const copyConversationId = async () => {
         :back-url="backButtonUrl"
         class="ltr:mr-2 rtl:ml-2"
       />
-      <Avatar
-        :name="conversationTitle"
+      <AvatarPreview
+        :key="chat.id"
         :src="conversationAvatarSrc"
-        :size="32"
-        :status="currentContact.availability_status"
-        hide-offline-status
-        rounded-full
-      />
+        :name="conversationTitle"
+      >
+        <Avatar
+          :name="conversationTitle"
+          :src="conversationAvatarSrc"
+          :size="32"
+          :status="currentContact.availability_status"
+          hide-offline-status
+        />
+      </AvatarPreview>
       <div
         class="flex flex-col items-start min-w-0 ml-2 overflow-hidden rtl:ml-0 rtl:mr-2"
       >
