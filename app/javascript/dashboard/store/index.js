@@ -33,6 +33,7 @@ import csat from './modules/csat';
 import customRole from './modules/customRole';
 import customViews from './modules/customViews';
 import dashboardApps from './modules/dashboardApps';
+import deals from './modules/deals';
 import draftMessages from './modules/draftMessages';
 import globalConfig from 'shared/store/globalConfig';
 import inboxAssignableAgents from './modules/inboxAssignableAgents';
@@ -100,6 +101,7 @@ export default createStore({
     customRole,
     customViews,
     dashboardApps,
+    deals,
     draftMessages,
     globalConfig,
     inboxAssignableAgents,

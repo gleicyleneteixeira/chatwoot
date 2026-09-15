@@ -200,15 +200,17 @@ const fetchAllConversationsForKanban = async () => {
   }
 };
 
+const allDeals = computed(() => store.getters['deals/getAllDeals'] || []);
+
 const fetchKanbanData = async () => {
   isLoading.value = true;
   try {
-    // Read route parameters directly from the route before triggering fetch
     const accountId = Number(route.params.accountId);
     const pipelineId = Number(route.params.pipelineId || route.query.pipeline_id);
 
     await Promise.all([
       fetchAllConversationsForKanban(),
+      store.dispatch('deals/fetchDeals'),
       store.dispatch('labels/get'),
       store.dispatch('inboxes/get'),
       store.dispatch('agents/get'),
@@ -284,45 +286,27 @@ const syncColumns = () => {
     newMap[stage.id] = [];
   });
 
-  let chats = [...filteredConversations.value];
+  // 1. Map Deals into matching pipeline stages
+  const dealsForPipeline = allDeals.value.filter(
+    d => String(d.pipeline_id) === String(activePipeline.value.id)
+  );
 
-  // Apply sort
-  if (sortBy.value === 'priority') {
-    const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
-    chats.sort((a, b) => {
-      const pa = priorityOrder[a.priority] ?? 4;
-      const pb = priorityOrder[b.priority] ?? 4;
-      return pa - pb;
-    });
-  } else if (sortBy.value === 'due_date') {
-    chats.sort((a, b) => {
-      const da = a.custom_attributes?.due_date
-        ? new Date(a.custom_attributes.due_date)
-        : null;
-      const db = b.custom_attributes?.due_date
-        ? new Date(b.custom_attributes.due_date)
-        : null;
-      if (!da && !db) return 0;
-      if (!da) return 1;
-      if (!db) return -1;
-      return da - db;
-    });
-  } else {
-    // 'newest' — most recent first
-    chats.sort((a, b) => {
-      const ta = a.created_at || a.timestamp || 0;
-      const tb = b.created_at || b.timestamp || 0;
-      return tb - ta;
-    });
-  }
+  dealsForPipeline.forEach(deal => {
+    if (newMap[deal.stage_id]) {
+      newMap[deal.stage_id].push(deal);
+    }
+  });
 
-  // Distribute sorted conversations into stages
+  // 2. Map conversations with kanban_stage if not already represented by a deal
+  const chats = [...filteredConversations.value];
   chats.forEach(conversation => {
-    const matchedStage = activePipeline.value.stages.find(
-      s => s.id === conversation.kanban_stage
-    );
-    if (matchedStage) {
-      newMap[matchedStage.id].push(conversation);
+    if (conversation.kanban_stage && newMap[conversation.kanban_stage]) {
+      const alreadyHasDeal = dealsForPipeline.some(
+        d => Number(d.conversation_id) === Number(conversation.id)
+      );
+      if (!alreadyHasDeal) {
+        newMap[conversation.kanban_stage].push(conversation);
+      }
     }
   });
 
@@ -331,9 +315,9 @@ const syncColumns = () => {
 
 let skipColumnSync = false;
 
-// Sync lists when chats, active pipeline, or loading state modifies
+// Sync lists when chats, deals, active pipeline, or loading state modifies
 watch(
-  [filteredConversations, activePipeline, isLoading],
+  [filteredConversations, allDeals, activePipeline, isLoading],
   () => {
     if (skipColumnSync) return;
     syncColumns();
@@ -373,28 +357,36 @@ const onDragEnd = event => {
 // Drag and drop changes handler
 const onCardDragChange = async (event, targetStage) => {
   if (event.added) {
-    const conversation = event.added.element;
-
+    const item = event.added.element;
     skipColumnSync = true;
 
-    // Dispara Typebot antes do update para não depender da migration
-    triggerStageTypebot(conversation, targetStage);
-
     try {
-      await ConversationApi.update(conversation.id, {
-        kanban_stage: targetStage.id,
-      });
-      store.dispatch('updateConversation', {
-        id: conversation.id,
-        kanban_stage: targetStage.id,
-      });
+      if (item.title && item.stage_id) {
+        // It's a Deal! Update deal's stage_id
+        await store.dispatch('deals/updateDeal', {
+          id: item.id,
+          stage_id: targetStage.id,
+          pipeline_id: activePipeline.value.id,
+        });
+      } else {
+        // It's a Conversation!
+        triggerStageTypebot(item, targetStage);
+        await ConversationApi.update(item.id, {
+          kanban_stage: targetStage.id,
+        });
+        store.dispatch('updateConversation', {
+          id: item.id,
+          kanban_stage: targetStage.id,
+        });
+      }
 
       if (
         activePipeline.value.automations?.auto_resolve_on_won_lost &&
-        (targetStage.is_won || targetStage.is_lost)
+        (targetStage.is_won || targetStage.is_lost) &&
+        item.conversation_id
       ) {
         await store.dispatch('toggleStatus', {
-          conversationId: conversation.id,
+          conversationId: item.conversation_id || item.id,
           status: 'resolved',
         });
       }
@@ -1057,7 +1049,8 @@ const importOpenConversations = async () => {
             >
               <template #item="{ element }">
                 <KanbanCard
-                  :conversation="element"
+                  :deal="element.stage_id ? element : null"
+                  :conversation="element.stage_id ? (element.conversation || {}) : element"
                   :pipeline-agents="activePipeline?.agents || []"
                   @resolve="resolveConversation"
                   @assign="handleAssign"

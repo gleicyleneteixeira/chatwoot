@@ -82,6 +82,7 @@ class Account < ApplicationRecord
   has_many :categories, dependent: :destroy_async, class_name: '::Category'
   has_many :contacts, dependent: :destroy_async
   has_many :conversations, dependent: :destroy_async
+  has_many :deals, dependent: :destroy_async
   has_many :attachments, dependent: :destroy
   has_many :group_contacts, dependent: :destroy
   has_many :csat_survey_responses, dependent: :destroy_async

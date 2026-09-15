@@ -128,6 +128,7 @@ class Conversation < ApplicationRecord
   has_many :reporting_events, dependent: :destroy_async
   has_many :group_contacts, dependent: :destroy
   has_many :additional_contacts, through: :group_contacts, source: :contact
+  has_many :deals, dependent: :nullify
 
   before_save :ensure_snooze_until_reset
   before_create :determine_conversation_status

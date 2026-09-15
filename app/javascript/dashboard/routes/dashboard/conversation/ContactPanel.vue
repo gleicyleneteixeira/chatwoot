@@ -27,6 +27,7 @@ import SidebarActionsHeader from 'dashboard/components-next/SidebarActionsHeader
 import LinearIssuesList from 'dashboard/components/widgets/conversation/linear/IssuesList.vue';
 import LinearSetupCTA from 'dashboard/components/widgets/conversation/linear/LinearSetupCTA.vue';
 import ConversationSidebarKanban from 'dashboard/components/widgets/conversation/ConversationSidebarKanban.vue';
+import ContactDeals from './contact/ContactDeals.vue';
 
 const props = defineProps({
   conversationId: {
@@ -199,9 +200,7 @@ onMounted(() => {
             "
           >
             <AccordionItem
-              :title="
-                $t('KANBAN.SIDEBAR.SECTION_TITLE')
-              "
+              title="Negócios / CRM"
               :is-open="isContactSidebarItemOpen('is_kanban_pipeline_open')"
               compact
               @toggle="
@@ -209,7 +208,8 @@ onMounted(() => {
                   toggleSidebarUIState('is_kanban_pipeline_open', value)
               "
             >
-              <ConversationSidebarKanban
+              <ContactDeals
+                :contact-id="contactId"
                 :conversation-id="conversationId"
               />
             </AccordionItem>

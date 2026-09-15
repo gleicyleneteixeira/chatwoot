@@ -8,9 +8,13 @@ import Icon from 'dashboard/components-next/icon/Icon.vue';
 import Thumbnail from 'dashboard/components/widgets/Thumbnail.vue';
 
 const props = defineProps({
+  deal: {
+    type: Object,
+    default: null,
+  },
   conversation: {
     type: Object,
-    required: true,
+    default: () => ({}),
   },
   pipelineAgents: {
     type: Array,
@@ -385,6 +389,78 @@ onUnmounted(() => {
 const router = useRouter();
 const route = useRoute();
 
+const dealTitle = computed(() => {
+  return props.deal?.title || props.conversation?.group_title || props.conversation?.title || 'Negócio sem título';
+});
+
+const contactName = computed(() => {
+  return (
+    props.deal?.contact?.name ||
+    props.conversation?.meta?.sender?.name ||
+    'Cliente'
+  );
+});
+
+const contactThumbnail = computed(() => {
+  return (
+    props.deal?.contact?.thumbnail ||
+    props.conversation?.meta?.sender?.thumbnail
+  );
+});
+
+const dealValueFormatted = computed(() => {
+  if (props.deal?.formatted_value) return props.deal.formatted_value;
+  if (props.deal?.value !== undefined && props.deal?.value !== null) {
+    return `R$ ${Number(props.deal.value).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+    })}`;
+  }
+  return null;
+});
+
+const customAttributesEntries = computed(() => {
+  const attrs = props.deal?.custom_attributes || props.conversation?.custom_attributes || {};
+  return Object.entries(attrs).filter(([_, val]) => val !== null && val !== undefined && val !== '');
+});
+
+const navigateToConversation = () => {
+  const accountId =
+    route.params.accountId ||
+    props.deal?.account_id ||
+    props.conversation?.account_id ||
+    store.getters.getCurrentAccountId;
+
+  const convId = props.deal?.conversation_id || props.conversation?.id;
+
+  if (convId) {
+    router.push({
+      name: 'inbox_conversation',
+      params: {
+        accountId,
+        conversation_id: convId,
+      },
+    }).catch(() => {
+      router.push(`/app/accounts/${accountId}/conversations/${convId}`);
+    });
+  } else if (props.deal?.contact_id) {
+    const allConvs = store.getters.getAllConversations || [];
+    const contactConv = allConvs.find(
+      c => Number(c.meta?.sender?.id) === Number(props.deal.contact_id)
+    );
+    if (contactConv) {
+      router.push({
+        name: 'inbox_conversation',
+        params: {
+          accountId,
+          conversation_id: contactConv.id,
+        },
+      });
+    } else {
+      router.push(`/app/accounts/${accountId}/dashboard`);
+    }
+  }
+};
+
 const openConversation = () => {
   if (!props.conversation || !props.conversation.id) return;
 
@@ -430,48 +506,63 @@ const openConversation = () => {
       <Icon icon="i-lucide-grip-vertical" class="size-3.5" />
     </div>
 
-    <!-- Card Header: Contact Avatar + Name/Channel | Assignee Avatar -->
+    <!-- Card Header: Deal Title & Value + Shortcut Button -->
     <div class="flex items-start justify-between w-full gap-2 pl-4">
-      <div class="flex items-center gap-2.5 min-w-0">
-        <!-- Avatar with Online Indicator -->
-        <div class="relative shrink-0">
+      <div class="flex flex-col min-w-0">
+        <span class="text-sm font-bold text-slate-100 truncate">
+          {{ dealTitle }}
+        </span>
+
+        <div class="flex items-center gap-2 mt-1">
           <Thumbnail
-            :src="props.conversation.meta?.sender?.thumbnail"
-            :username="props.conversation.meta?.sender?.name || 'Cliente'"
-            size="28px"
+            :src="contactThumbnail"
+            :username="contactName"
+            size="20px"
             class="shrink-0 rounded-full"
           />
-          <span
-            v-if="isOnline"
-            class="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 border-2 border-slate-900"
-          />
-        </div>
-
-        <div class="flex flex-col min-w-0">
-          <span class="text-xs font-bold text-slate-100 truncate">
-            {{ props.conversation.meta?.sender?.name || 'Cliente' }}
+          <span class="text-xs text-slate-300 truncate">
+            {{ contactName }}
           </span>
-
-          <!-- Channel Pill (icon + name) -->
-          <div v-if="channelMeta" class="flex items-center gap-1 mt-0.5">
-            <span
-              :class="channelMeta.color"
-              class="flex items-center gap-1.5 text-[10px] font-semibold opacity-85"
-            >
-              <Icon :icon="channelMeta.icon" class="size-3 shrink-0" />
-              <span>{{ channelMeta.name.toLowerCase() }}</span>
-            </span>
-          </div>
         </div>
       </div>
+
+      <!-- Value Badge -->
+      <span
+        v-if="dealValueFormatted"
+        class="shrink-0 px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+      >
+        {{ dealValueFormatted }}
+      </span>
     </div>
 
-    <!-- Message Snippet -->
+    <!-- Custom Attributes / Snippet -->
+    <div v-if="customAttributesEntries.length > 0" class="flex flex-wrap gap-1 mt-2.5 pl-4">
+      <span
+        v-for="[key, val] in customAttributesEntries"
+        :key="key"
+        class="px-2 py-0.5 text-[10px] font-medium rounded bg-slate-800 text-slate-300 border border-slate-700/50"
+      >
+        {{ key }}: {{ val }}
+      </span>
+    </div>
     <p
-      class="mt-3 pl-4 text-xs text-slate-400 font-normal leading-relaxed break-words line-clamp-2 min-h-[28px]"
+      v-else-if="messageSnippet"
+      class="mt-2.5 pl-4 text-xs text-slate-400 font-normal leading-relaxed break-words line-clamp-2"
     >
       {{ messageSnippet }}
     </p>
+
+    <!-- Shortcut to Conversation -->
+    <div class="flex items-center justify-between mt-3 pt-2 border-t border-slate-800/40 pl-4">
+      <button
+        type="button"
+        class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-colors cursor-pointer"
+        title="Abrir conversa no Chatwoot"
+        @click.stop="navigateToConversation"
+      >
+        <Icon icon="i-lucide-message-square" class="size-3.5" />
+        <span>Ir para Conversa</span>
+      </button>
 
     <!-- Card Footer (Due Date/Priority + Timeago/Date with icons) -->
     <div
