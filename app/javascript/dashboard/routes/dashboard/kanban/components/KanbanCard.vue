@@ -6,6 +6,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
 import Thumbnail from 'dashboard/components/widgets/Thumbnail.vue';
+import DealsApi from 'dashboard/api/deals';
 
 const props = defineProps({
   conversation: {
@@ -13,6 +14,10 @@ const props = defineProps({
     required: true,
   },
   pipelineAgents: {
+    type: Array,
+    default: () => [],
+  },
+  dealAttributeDefs: {
     type: Array,
     default: () => [],
   },
@@ -385,6 +390,53 @@ onUnmounted(() => {
 const router = useRouter();
 const route = useRoute();
 
+// Deal data
+const linkedDeal = ref(null);
+
+const fetchLinkedDeal = async () => {
+  try {
+    const response = await DealsApi.getDeals({
+      contactId: props.conversation.meta?.sender?.id,
+    });
+    const deals = response.data.deals || [];
+    linkedDeal.value = deals.find(
+      d => d.custom_attributes?.kanban_stage === props.conversation.kanban_stage
+    ) || deals[0] || null;
+  } catch {
+    // ignore
+  }
+};
+
+onMounted(() => {
+  fetchLinkedDeal();
+});
+
+const formatCurrency = val => {
+  if (!val && val !== 0) return null;
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(val);
+};
+
+const dealTitle = computed(() => linkedDeal.value?.title || null);
+const dealValue = computed(() =>
+  linkedDeal.value?.value ? formatCurrency(linkedDeal.value.value) : null
+);
+
+const visibleDealAttributes = computed(() => {
+  if (!linkedDeal.value || !props.dealAttributeDefs.length) return [];
+  return props.dealAttributeDefs
+    .filter(a => a.show_on_kanban_card)
+    .map(a => ({
+      label: a.attribute_display_name,
+      value: linkedDeal.value.custom_attributes?.[a.attribute_key] || null,
+    }))
+    .filter(a => a.value);
+});
+
+const showDealTooltip = ref(false);
+
 const openConversation = () => {
   if (!props.conversation || !props.conversation.id) return;
 
@@ -452,6 +504,36 @@ const openConversation = () => {
             {{ props.conversation.meta?.sender?.name || 'Cliente' }}
           </span>
 
+          <!-- Deal Title -->
+          <div
+            v-if="dealTitle"
+            class="relative mt-0.5"
+            @mouseenter="showDealTooltip = true"
+            @mouseleave="showDealTooltip = false"
+          >
+            <span class="text-[10px] font-semibold text-blue-400 truncate block">
+              <Icon icon="i-lucide-briefcase" class="size-2.5 inline" />
+              {{ dealTitle }}
+            </span>
+            <!-- Deal Tooltip -->
+            <div
+              v-if="showDealTooltip && linkedDeal"
+              class="absolute bottom-full left-0 mb-2 p-3 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 min-w-[200px] pointer-events-none"
+            >
+              <div class="flex flex-col gap-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-100">{{ linkedDeal.title }}</span>
+                  <span v-if="dealValue" class="text-xs font-bold text-emerald-400">{{ dealValue }}</span>
+                </div>
+                <p v-if="linkedDeal.description" class="text-[10px] text-slate-400 line-clamp-2">{{ linkedDeal.description }}</p>
+                <div v-for="attr in visibleDealAttributes" :key="attr.label" class="flex items-center gap-1 text-[10px]">
+                  <span class="text-slate-500">{{ attr.label }}:</span>
+                  <span class="text-slate-300">{{ attr.value }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Channel Pill (icon + name) -->
           <div v-if="channelMeta" class="flex items-center gap-1 mt-0.5">
             <span
@@ -479,6 +561,14 @@ const openConversation = () => {
     >
       <!-- Left side: Due Date / Priority / Inbox / Message Count / Team -->
       <div class="flex items-center gap-1.5 min-w-0">
+        <!-- Deal Value Badge -->
+        <span
+          v-if="dealValue"
+          class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0"
+        >
+          {{ dealValue }}
+        </span>
+
         <!-- Inbox Badge -->
         <span
           v-if="inbox && inbox.name"

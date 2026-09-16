@@ -38,6 +38,8 @@ export default {
       attributeKey: '',
       values: [],
       tagInputTouched: false,
+      showOnKanbanCard: false,
+      showOnSidebar: false,
     };
   },
   validations: {
@@ -101,6 +103,9 @@ export default {
     isRegexEnabled() {
       return this.regexEnabled;
     },
+    isDealAttribute() {
+      return this.selectedAttribute.attribute_model === 'deal_attribute';
+    },
   },
   mounted() {
     this.setFormValues();
@@ -121,6 +126,8 @@ export default {
       this.regexCue = this.selectedAttribute.regex_cue;
       this.regexEnabled = regexPattern != null;
       this.values = this.setAttributeListValue;
+      this.showOnKanbanCard = !!this.selectedAttribute.show_on_kanban_card;
+      this.showOnSidebar = !!this.selectedAttribute.show_on_sidebar;
     },
     async editAttributes() {
       this.v$.$touch();
@@ -139,6 +146,8 @@ export default {
           attribute_values: this.updatedAttributeListValues,
           regex_pattern: normalizeRegexPattern(this.regexPattern),
           regex_cue: this.regexCue,
+          show_on_kanban_card: this.showOnKanbanCard,
+          show_on_sidebar: this.showOnSidebar,
         });
         this.alertMessage = this.$t('ATTRIBUTES_MGMT.EDIT.API.SUCCESS_MESSAGE');
         this.onClose();
@@ -257,6 +266,25 @@ export default {
           type="text"
           :placeholder="$t('ATTRIBUTES_MGMT.ADD.FORM.REGEX_CUE.PLACEHOLDER')"
         />
+        <!-- Deal attribute display toggles -->
+        <div v-if="isDealAttribute" class="mb-4 space-y-2">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              v-model="showOnKanbanCard"
+              type="checkbox"
+              class="rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-blue-500"
+            />
+            <span class="text-sm">{{ $t('ATTRIBUTES_MGMT.ADD.FORM.SHOW_ON_KANBAN_CARD') || 'Exibir no Card do Kanban' }}</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              v-model="showOnSidebar"
+              type="checkbox"
+              class="rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-blue-500"
+            />
+            <span class="text-sm">{{ $t('ATTRIBUTES_MGMT.ADD.FORM.SHOW_ON_SIDEBAR') || 'Exibir no Painel Lateral da Conversa' }}</span>
+          </label>
+        </div>
       </div>
       <div class="flex flex-row justify-end w-full gap-2 px-0 py-2">
         <NextButton

@@ -199,7 +199,8 @@ Rails.application.routes.draw do
               get :inbox_assistant
               get :reporting_events if ChatwootApp.enterprise?
             end
-          end
+           end
+        resources :deals, only: [:index, :show, :create, :update, :destroy]
         resources :internal_conversations, only: [:index, :create] do
           resource :voice_call, only: [:create], module: :internal_conversations
         end

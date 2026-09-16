@@ -172,6 +172,7 @@ const addStage = () => {
     color: '#3b82f6',
     typebot_url: '',
     typebot_id: '',
+    automation_message: '',
   });
 };
 
@@ -517,6 +518,41 @@ const handleSave = () => {
                       Ao mover um lead para esta etapa, iniciará automaticamente
                       o Typebot com os dados do contato.
                     </p>
+                  </div>
+
+                  <!-- Automation Message -->
+                  <div class="sm:col-span-2 space-y-2 pt-2 border-t border-slate-800">
+                    <div class="flex items-center gap-2">
+                      <Icon
+                        icon="i-lucide-message-circle"
+                        class="size-3.5 text-emerald-400"
+                      />
+                      <span
+                        class="text-[10px] uppercase font-bold tracking-wider text-slate-500"
+                      >
+                        Mensagem Padrão de Automação
+                      </span>
+                    </div>
+                    <textarea
+                      v-model="stage.automation_message"
+                      rows="3"
+                      class="w-full px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900 text-slate-200 text-xs focus:border-blue-500 outline-none resize-none font-mono"
+                      placeholder="Ao mover card para esta etapa, envie esta mensagem automaticamente.&#10;Variáveis: {{ contact.first_name }}, {{ contact.name }}, {{ deal.title }}, {{ deal.value }}, {{ deal.custom_attributes.chave }}"
+                    />
+                    <p class="text-[9px] text-slate-500">
+                      Se preenchido, ao arrastar um card para esta etapa, um modal de confirmação será exibido. Deixe vazio para movimentação silenciosa.
+                    </p>
+                    <div class="flex flex-wrap gap-1.5 mt-1">
+                      <button
+                        v-for="v in ['contact.first_name', 'contact.name', 'deal.title', 'deal.value']"
+                        :key="v"
+                        type="button"
+                        class="px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-slate-800 text-slate-400 hover:text-blue-400 hover:bg-slate-700 transition-colors border border-slate-700"
+                        @click="stage.automation_message = (stage.automation_message || '') + `{{${v}}}`"
+                      >
+                        {{`{{${v}}}`}}
+                      </button>
+                    </div>
                   </div>
                 </div>
 

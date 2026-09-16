@@ -15,10 +15,13 @@ import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
 // Custom Kanban Components
 import KanbanCard from './components/KanbanCard.vue';
 import PipelineSettingsModal from './components/PipelineSettingsModal.vue';
+import CreateDealModal from '../../../components/widgets/conversation/CreateDealModal.vue';
+import StageAutomationModal from '../../../components/widgets/conversation/StageAutomationModal.vue';
 
 // Config Storage Helper
 import conversationApi from 'dashboard/api/inbox/conversation';
 import ConversationApi from 'dashboard/api/conversations';
+import DealsApi from 'dashboard/api/deals';
 import { KanbanConfigHelper } from './helpers/kanbanConfig';
 
 const { t } = useI18n();
@@ -43,6 +46,20 @@ const showSortLabel = ref('Mais recente');
 const showSettingsModal = ref(false);
 const activeEditingPipeline = ref(null);
 const showAddCardPopoverId = ref(null); // ID of the column where "+ Adicionar tarefa" is open
+const showCreateDealModal = ref(false);
+
+// Stage Automation Modal
+const showAutomationModal = ref(false);
+const automationConversation = ref(null);
+const automationTargetStage = ref(null);
+const automationSourceStage = ref(null);
+const pendingDragEvent = ref(null);
+
+// Deal attribute definitions for card display
+const dealAttributeDefs = computed(() => {
+  const allAttrs = store.getters['attributes/getAttributes'] || [];
+  return allAttrs.filter(a => a.attribute_model === 'deal_attribute');
+});
 
 // Load core Chatwoot resources
 const allAgents = computed(() => store.getters['agents/getAgents'] || []);
@@ -375,6 +392,20 @@ const onCardDragChange = async (event, targetStage) => {
   if (event.added) {
     const conversation = event.added.element;
 
+    // Check if target stage has automation message
+    if (targetStage.automation_message && targetStage.automation_message.trim()) {
+      // Find the source stage
+      const sourceStage = activePipeline.value.stages.find(
+        s => s.id === conversation.kanban_stage
+      );
+      automationConversation.value = conversation;
+      automationTargetStage.value = targetStage;
+      automationSourceStage.value = sourceStage;
+      pendingDragEvent.value = event;
+      showAutomationModal.value = true;
+      return;
+    }
+
     skipColumnSync = true;
 
     // Dispara Typebot antes do update para não depender da migration
@@ -405,6 +436,93 @@ const onCardDragChange = async (event, targetStage) => {
       skipColumnSync = false;
     }
   }
+};
+
+// Automation modal handlers
+const handleAutomationConfirmSend = async ({ message, sendWhatsApp }) => {
+  showAutomationModal.value = false;
+  const conversation = automationConversation.value;
+  const targetStage = automationTargetStage.value;
+
+  skipColumnSync = true;
+  try {
+    await ConversationApi.update(conversation.id, {
+      kanban_stage: targetStage.id,
+    });
+    store.dispatch('updateConversation', {
+      id: conversation.id,
+      kanban_stage: targetStage.id,
+    });
+
+    if (message && message.trim()) {
+      await store.dispatch('messages/create', {
+        conversationId: conversation.id,
+        message: { content: message.trim(), private: false },
+      });
+    }
+
+    if (
+      activePipeline.value.automations?.auto_resolve_on_won_lost &&
+      (targetStage.is_won || targetStage.is_lost)
+    ) {
+      await store.dispatch('toggleStatus', {
+        conversationId: conversation.id,
+        status: 'resolved',
+      });
+    }
+  } catch (err) {
+    console.error('Failed to complete automation:', err);
+  } finally {
+    skipColumnSync = false;
+    automationConversation.value = null;
+    automationTargetStage.value = null;
+    automationSourceStage.value = null;
+    pendingDragEvent.value = null;
+  }
+};
+
+const handleAutomationMoveOnly = async () => {
+  showAutomationModal.value = false;
+  const conversation = automationConversation.value;
+  const targetStage = automationTargetStage.value;
+
+  skipColumnSync = true;
+  try {
+    await ConversationApi.update(conversation.id, {
+      kanban_stage: targetStage.id,
+    });
+    store.dispatch('updateConversation', {
+      id: conversation.id,
+      kanban_stage: targetStage.id,
+    });
+
+    if (
+      activePipeline.value.automations?.auto_resolve_on_won_lost &&
+      (targetStage.is_won || targetStage.is_lost)
+    ) {
+      await store.dispatch('toggleStatus', {
+        conversationId: conversation.id,
+        status: 'resolved',
+      });
+    }
+  } catch (err) {
+    console.error('Failed to move card:', err);
+  } finally {
+    skipColumnSync = false;
+    automationConversation.value = null;
+    automationTargetStage.value = null;
+    automationSourceStage.value = null;
+    pendingDragEvent.value = null;
+  }
+};
+
+const handleAutomationCancel = () => {
+  showAutomationModal.value = false;
+  automationConversation.value = null;
+  automationTargetStage.value = null;
+  automationSourceStage.value = null;
+  pendingDragEvent.value = null;
+  syncColumns();
 };
 
 // Quick Resolve action inside the card
@@ -915,12 +1033,10 @@ const importOpenConversations = async () => {
           <Button
             blue
             class="flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-xl shrink-0"
-            @click="
-              showAddCardPopoverId = activePipeline?.stages[0]?.id || null
-            "
+            @click="showCreateDealModal = true"
           >
             <Icon icon="i-lucide-plus" class="size-3.5" />
-            Adicionar tarefa
+            {{ t('KANBAN.HEADER.CREATE_DEAL') || '+ Criar Novo Negócio' }}
           </Button>
         </div>
       </header>
@@ -1059,6 +1175,7 @@ const importOpenConversations = async () => {
                 <KanbanCard
                   :conversation="element"
                   :pipeline-agents="activePipeline?.agents || []"
+                  :deal-attribute-defs="dealAttributeDefs"
                   @resolve="resolveConversation"
                   @assign="handleAssign"
                   @remove-pipeline="handleRemovePipeline"
@@ -1136,6 +1253,26 @@ const importOpenConversations = async () => {
       @close="closeSettingsModal"
       @save="savePipelineConfig"
       @delete="deleteActivePipeline"
+    />
+
+    <!-- Create Deal Modal -->
+    <CreateDealModal
+      v-if="showCreateDealModal"
+      :from-kanban="true"
+      @close="showCreateDealModal = false"
+      @created="showCreateDealModal = false"
+    />
+
+    <!-- Stage Automation Modal -->
+    <StageAutomationModal
+      v-if="showAutomationModal"
+      :is-open="showAutomationModal"
+      :conversation="automationConversation"
+      :target-stage="automationTargetStage"
+      :pipeline="activePipeline"
+      @confirm-send="handleAutomationConfirmSend"
+      @move-only="handleAutomationMoveOnly"
+      @cancel="handleAutomationCancel"
     />
   </div>
 </template>

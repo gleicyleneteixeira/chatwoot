@@ -27,6 +27,7 @@ import SidebarActionsHeader from 'dashboard/components-next/SidebarActionsHeader
 import LinearIssuesList from 'dashboard/components/widgets/conversation/linear/IssuesList.vue';
 import LinearSetupCTA from 'dashboard/components/widgets/conversation/linear/LinearSetupCTA.vue';
 import ConversationSidebarKanban from 'dashboard/components/widgets/conversation/ConversationSidebarKanban.vue';
+import ContactDeals from 'dashboard/components/widgets/conversation/ContactDeals.vue';
 
 const props = defineProps({
   conversationId: {
@@ -210,6 +211,27 @@ onMounted(() => {
               "
             >
               <ConversationSidebarKanban
+                :conversation-id="conversationId"
+              />
+            </AccordionItem>
+          </div>
+          <div
+            v-else-if="
+              shouldShowSidebarItem(element) &&
+              element.name === 'contact_deals'
+            "
+          >
+            <AccordionItem
+              :title="$t('DEAL.SIDEBAR.SECTION_TITLE') || 'Negócios'"
+              :is-open="isContactSidebarItemOpen('is_contact_deals_open')"
+              compact
+              @toggle="
+                value =>
+                  toggleSidebarUIState('is_contact_deals_open', value)
+              "
+            >
+              <ContactDeals
+                :contact-id="contactId"
                 :conversation-id="conversationId"
               />
             </AccordionItem>
