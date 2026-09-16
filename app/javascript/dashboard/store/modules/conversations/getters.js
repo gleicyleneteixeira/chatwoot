@@ -18,11 +18,13 @@ export const getSelectedChatConversation = ({
   allConversations,
   selectedChatId,
 }) =>
-  allConversations.filter(conversation => conversation.id === selectedChatId);
+  (allConversations || []).filter(
+    conversation => conversation.id === selectedChatId
+  );
 
 const getters = {
   getAllConversations: ({ allConversations, chatSortFilter: sortKey }) => {
-    return allConversations.sort((a, b) => sortComparator(a, b, sortKey));
+    return (allConversations || []).sort((a, b) => sortComparator(a, b, sortKey));
   },
   getFilteredConversations: (
     { allConversations, chatSortFilter, appliedFilters },
@@ -31,13 +33,13 @@ const getters = {
     rootGetters
   ) => {
     const currentUser = rootGetters.getCurrentUser;
-    const currentUserId = rootGetters.getCurrentUser.id;
+    const currentUserId = rootGetters.getCurrentUser?.id;
     const currentAccountId = rootGetters.getCurrentAccountId;
 
     const permissions = getUserPermissions(currentUser, currentAccountId);
     const userRole = getUserRole(currentUser, currentAccountId);
 
-    return allConversations
+    return (allConversations || [])
       .filter(conversation => {
         const matchesFilterResult = matchesFilters(
           conversation,
@@ -55,7 +57,7 @@ const getters = {
       .sort((a, b) => sortComparator(a, b, chatSortFilter));
   },
   getSelectedChat: ({ selectedChatId, allConversations }) => {
-    const selectedChat = allConversations.find(
+    const selectedChat = (allConversations || []).find(
       conversation => conversation.id === selectedChatId
     );
     return selectedChat || {};
@@ -94,7 +96,7 @@ const getters = {
       ? (rootGetters['teams/getMyTeams'] || []).map(team => team.id)
       : [];
 
-    return _state.allConversations.filter(conversation => {
+    return (_state.allConversations || []).filter(conversation => {
       if (conversation.group) return false;
       const shouldFilter = applyPageFilters(conversation, activeFilters);
       const isChatMine =
@@ -116,7 +118,7 @@ const getters = {
     return hasAppliedFilters ? filterQueryGenerator(_state.appliedFilters) : [];
   },
   getUnAssignedChats: _state => activeFilters => {
-    return _state.allConversations.filter(conversation => {
+    return (_state.allConversations || []).filter(conversation => {
       const isUnAssigned = isConversationUnassigned(
         conversation,
         activeFilters.teamId
@@ -126,7 +128,7 @@ const getters = {
     });
   },
   getGroupChats: _state => activeFilters => {
-    return _state.allConversations.filter(conversation => {
+    return (_state.allConversations || []).filter(conversation => {
       const isGroup = !!conversation.group;
       const shouldFilter = applyPageFilters(conversation, activeFilters);
       return isGroup && shouldFilter;
@@ -135,7 +137,7 @@ const getters = {
   getParticipatingChats: (_state, _, __, rootGetters) => activeFilters => {
     const currentUserId = rootGetters.getCurrentUser?.id;
     const getWatchers = rootGetters['conversationWatchers/getByConversationId'];
-    return _state.allConversations.filter(conversation => {
+    return (_state.allConversations || []).filter(conversation => {
       const watchers = getWatchers(conversation.id);
       // Watchers are only loaded for the conversation open in the detail
       // panel. If loaded and current user is not in them, filter it out.
@@ -147,7 +149,7 @@ const getters = {
   },
   getMentionedChats: (_state, _, __, rootGetters) => activeFilters => {
     const currentUserId = rootGetters.getCurrentUser?.id;
-    return _state.allConversations.filter(conversation => {
+    return (_state.allConversations || []).filter(conversation => {
       if (conversation.group) return false;
       const hasMention = conversation.muted === false && 
         conversation.unread_count > 0 &&
@@ -157,7 +159,7 @@ const getters = {
     });
   },
   getWaitingChats: _state => activeFilters => {
-    return _state.allConversations.filter(conversation => {
+    return (_state.allConversations || []).filter(conversation => {
       if (conversation.group) return false;
       const isWaiting = !!conversation.waiting_since;
       const shouldFilter = applyPageFilters(conversation, activeFilters);
@@ -166,13 +168,13 @@ const getters = {
   },
   getAnsweredChats: (_state, _, __, rootGetters) => activeFilters => {
     const currentUser = rootGetters.getCurrentUser;
-    const currentUserId = rootGetters.getCurrentUser.id;
+    const currentUserId = rootGetters.getCurrentUser?.id;
     const currentAccountId = rootGetters.getCurrentAccountId;
 
     const permissions = getUserPermissions(currentUser, currentAccountId);
     const userRole = getUserRole(currentUser, currentAccountId);
 
-    return _state.allConversations.filter(conversation => {
+    return (_state.allConversations || []).filter(conversation => {
       if (conversation.group) return false;
       const isAnswered =
         !!conversation.first_reply_created_at && !conversation.waiting_since;
@@ -189,13 +191,13 @@ const getters = {
   },
   getAllStatusChats: (_state, _, __, rootGetters) => activeFilters => {
     const currentUser = rootGetters.getCurrentUser;
-    const currentUserId = rootGetters.getCurrentUser.id;
+    const currentUserId = rootGetters.getCurrentUser?.id;
     const currentAccountId = rootGetters.getCurrentAccountId;
 
     const permissions = getUserPermissions(currentUser, currentAccountId);
     const userRole = getUserRole(currentUser, currentAccountId);
 
-    return _state.allConversations.filter(conversation => {
+    return (_state.allConversations || []).filter(conversation => {
       if (conversation.group) return false;
       const shouldFilter = applyPageFilters(conversation, activeFilters);
       const allowedForRole = applyRoleFilter(
@@ -229,7 +231,7 @@ const getters = {
   getChatSortFilter: ({ chatSortFilter }) => chatSortFilter,
   getSelectedInbox: ({ currentInbox }) => currentInbox,
   getConversationById: _state => conversationId => {
-    return _state.allConversations.find(
+    return (_state.allConversations || []).find(
       value => value.id === Number(conversationId)
     );
   },

@@ -28,7 +28,7 @@ const state = {
 };
 
 const getConversationById = _state => conversationId => {
-  return _state.allConversations.find(c => c.id === conversationId);
+  return (_state.allConversations || []).find(c => c.id === conversationId);
 };
 
 // mutations
@@ -86,8 +86,10 @@ export const mutations = {
 
   [types.SET_PREVIOUS_CONVERSATIONS](_state, { id, data }) {
     if (data.length) {
-      const [chat] = _state.allConversations.filter(c => c.id === id);
-      chat.messages.unshift(...data);
+      const [chat] = (_state.allConversations || []).filter(c => c.id === id);
+      if (chat) {
+        chat.messages.unshift(...data);
+      }
     }
   },
   [types.SET_ALL_ATTACHMENTS](_state, { id, data }) {
@@ -98,7 +100,7 @@ export const mutations = {
     _state.attachmentsMeta[id] = { ...previous, ...data };
   },
   [types.SET_MISSING_MESSAGES](_state, { id, data }) {
-    const [chat] = _state.allConversations.filter(c => c.id === id);
+    const [chat] = (_state.allConversations || []).filter(c => c.id === id);
     if (!chat) return;
     chat.messages = data;
   },
@@ -129,29 +131,39 @@ export const mutations = {
   },
 
   [types.ASSIGN_TEAM](_state, { team, conversationId }) {
-    const [chat] = _state.allConversations.filter(c => c.id === conversationId);
-    chat.meta.team = team;
+    const [chat] = (_state.allConversations || []).filter(
+      c => c.id === conversationId
+    );
+    if (chat) {
+      chat.meta.team = team;
+    }
   },
 
   [types.UPDATE_CONVERSATION_LAST_ACTIVITY](
     _state,
     { lastActivityAt, conversationId }
   ) {
-    const [chat] = _state.allConversations.filter(c => c.id === conversationId);
+    const [chat] = (_state.allConversations || []).filter(
+      c => c.id === conversationId
+    );
     if (chat) {
       chat.last_activity_at = lastActivityAt;
     }
   },
   [types.ASSIGN_PRIORITY](_state, { priority, conversationId }) {
-    const [chat] = _state.allConversations.filter(c => c.id === conversationId);
-    chat.priority = priority;
+    const [chat] = (_state.allConversations || []).filter(
+      c => c.id === conversationId
+    );
+    if (chat) {
+      chat.priority = priority;
+    }
   },
 
   [types.UPDATE_CONVERSATION_CUSTOM_ATTRIBUTES](
     _state,
     { conversationId, customAttributes }
   ) {
-    const conversation = _state.allConversations.find(
+    const conversation = (_state.allConversations || []).find(
       c => c.id === conversationId
     );
     if (conversation) {
@@ -386,7 +398,7 @@ export const mutations = {
     _state,
     { id, lastSeen, unreadCount = 0 }
   ) {
-    const [chat] = _state.allConversations.filter(c => c.id === id);
+    const [chat] = (_state.allConversations || []).filter(c => c.id === id);
     if (chat) {
       chat.agent_last_seen_at = lastSeen;
       chat.unread_count = unreadCount;
@@ -409,7 +421,9 @@ export const mutations = {
   },
 
   [types.UPDATE_CONVERSATION_CONTACT](_state, { conversationId, ...payload }) {
-    const [chat] = _state.allConversations.filter(c => c.id === conversationId);
+    const [chat] = (_state.allConversations || []).filter(
+      c => c.id === conversationId
+    );
     if (chat) {
       chat.meta.sender = payload;
     }
@@ -450,14 +464,16 @@ export const mutations = {
   },
 
   [types.SET_CONVERSATION_CAN_REPLY](_state, { conversationId, canReply }) {
-    const [chat] = _state.allConversations.filter(c => c.id === conversationId);
+    const [chat] = (_state.allConversations || []).filter(
+      c => c.id === conversationId
+    );
     if (chat) {
       chat.can_reply = canReply;
     }
   },
 
   [types.CLEAR_CONTACT_CONVERSATIONS](_state, contactId) {
-    const chats = _state.allConversations.filter(
+    const chats = (_state.allConversations || []).filter(
       c => c.meta.sender.id !== contactId
     );
     _state.allConversations = chats;

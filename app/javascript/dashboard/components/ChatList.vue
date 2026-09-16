@@ -196,7 +196,7 @@ const hasAppliedFilters = computed(() => {
 
 const activeFolder = computed(() => {
   if (props.foldersId) {
-    const activeView = folders.value.filter(
+    const activeView = (folders.value || []).filter(
       view => view.id === Number(props.foldersId)
     );
     const [firstValue] = activeView;
@@ -320,16 +320,14 @@ watch(
 
 const conversationListPagination = computed(() => {
   const conversationsPerPage = 25;
-  const hasChatsOnView =
-    chatsOnView.value &&
-    Array.isArray(chatsOnView.value) &&
-    !chatsOnView.value.length;
+  const chats = chatsOnView.value || [];
+  const hasChatsOnView = chats.length > 0;
   const isNoFiltersOrFoldersAndChatListNotEmpty =
     !hasAppliedFiltersOrActiveFolders.value && hasChatsOnView;
   const isUnderPerPage =
-    chatsOnView.value.length < conversationsPerPage &&
+    chats.length < conversationsPerPage &&
     activeAssigneeTabCount.value < conversationsPerPage &&
-    activeAssigneeTabCount.value > chatsOnView.value.length;
+    activeAssigneeTabCount.value > chats.length;
 
   if (isNoFiltersOrFoldersAndChatListNotEmpty && isUnderPerPage) {
     return 1;
@@ -472,7 +470,7 @@ const conversationList = computed(() => {
       localConversationList = [...allChatList.value(filters)];
     }
   } else {
-    localConversationList = [...chatLists.value];
+    localConversationList = [...(chatLists.value || [])];
   }
 
   if (activeFolder.value) {
