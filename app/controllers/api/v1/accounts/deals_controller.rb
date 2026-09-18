@@ -2,11 +2,18 @@ class Api::V1::Accounts::DealsController < Api::V1::Accounts::BaseController
   before_action :fetch_deal, only: [:show, :update, :destroy]
 
   def index
-    @deals = Current.account.deals
+    scope = Current.account.deals
                            .by_contact(params[:contact_id])
                            .by_pipeline(params[:pipeline_id])
                            .by_stage(params[:stage_id])
-                           .order(created_at: :desc)
+
+    if params[:status] == 'active'
+      scope = scope.active
+    elsif params[:status].present?
+      scope = scope.by_status(params[:status])
+    end
+
+    @deals = scope.order(created_at: :desc)
     render 'api/v1/accounts/deals/index', format: :json
   end
 
@@ -50,6 +57,7 @@ class Api::V1::Accounts::DealsController < Api::V1::Accounts::BaseController
       :stage_id,
       :contact_id,
       :conversation_id,
+      :user_id,
       :status,
       custom_attributes: {}
     )

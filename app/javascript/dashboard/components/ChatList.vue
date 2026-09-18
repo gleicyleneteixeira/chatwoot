@@ -89,7 +89,8 @@ const store = useStore();
 const resolveAttributesModalRef = ref(null);
 
 const conversationLayout = ref(
-  uiSettings.value.conversation_layout_type || wootConstants.LAYOUT_TYPES.CONDENSED
+  uiSettings.value.conversation_layout_type ||
+    wootConstants.LAYOUT_TYPES.CONDENSED
 );
 const activeAssigneeTab = ref(wootConstants.ASSIGNEE_TYPE.WAITING);
 const { archives } = useConversationArchives();
@@ -251,6 +252,11 @@ const userPermissions = computed(() => {
   return getUserPermissions(currentUser.value, currentAccountId.value);
 });
 
+const isUnifiedListViewMode = computed(() => {
+  const account = getAccountFn.value(currentAccountId.value);
+  return account.settings?.conversation_list_view_mode === 'unified_list';
+});
+
 const assigneeTabItems = computed(() => {
   return filterItemsByPermission(
     ASSIGNEE_TYPE_TAB_PERMISSIONS,
@@ -267,7 +273,10 @@ const assigneeTabItems = computed(() => {
       if (hideUnassignedForAgents.value && key === 'unassigned') {
         return false;
       }
-      if (isUnifiedListViewMode.value && (key === 'waiting' || key === 'answered')) {
+      if (
+        isUnifiedListViewMode.value &&
+        (key === 'waiting' || key === 'answered')
+      ) {
         return false;
       }
       return true;
@@ -460,7 +469,8 @@ const conversationList = computed(() => {
   if (!hasAppliedFiltersOrActiveFolders.value) {
     const filters = conversationFilters.value;
     if (
-      props.conversationType === wootConstants.CONVERSATION_TYPE.PARTICIPATING ||
+      props.conversationType ===
+        wootConstants.CONVERSATION_TYPE.PARTICIPATING ||
       activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.PARTICIPATING
     ) {
       localConversationList = filterByAssigneeTab(
@@ -544,11 +554,6 @@ const uniqueInboxes = computed(() => {
 
 const isHorizontalLayout = computed(() => {
   return conversationLayout.value === wootConstants.LAYOUT_TYPES.HORIZONTAL_TOP;
-});
-
-const isUnifiedListViewMode = computed(() => {
-  const account = getAccountFn.value(currentAccountId.value);
-  return account.settings?.conversation_list_view_mode === 'unified_list';
 });
 
 const pendingConversations = computed(() => {
@@ -1098,8 +1103,10 @@ watch(conversationFilters, (newVal, oldVal) => {
   <div
     class="flex flex-col flex-shrink-0 conversations-list-wrap bg-n-surface-1 w-full max-w-full relative"
     :class="[
-      { hidden: !showConversationList },
-      isOnExpandedLayout ? 'basis-full' : 'w-full sm:w-[340px] 2xl:w-[412px]',
+      { 'hidden sm:flex': !showConversationList },
+      isOnExpandedLayout
+        ? 'basis-full sm:basis-auto sm:w-[340px] 2xl:w-[412px]'
+        : 'w-full sm:w-[340px] 2xl:w-[412px]',
     ]"
   >
     <slot />
@@ -1150,7 +1157,6 @@ watch(conversationFilters, (newVal, oldVal) => {
       @chat-tab-change="updateAssigneeTab"
     />
 
-<<<<<<< HEAD
     <HorizontalTabs
       v-if="!hasAppliedFiltersOrActiveFolders && isHorizontalLayout"
       :items="assigneeTabItems"
@@ -1158,12 +1164,10 @@ watch(conversationFilters, (newVal, oldVal) => {
       @chat-tab-change="updateAssigneeTab"
     />
 
-=======
     <ArchivedConversations
       v-if="activeAssigneeTab === 'me' && !hasAppliedFiltersOrActiveFolders"
       :key="currentUser.id + ':' + currentAccountId"
     />
->>>>>>> af275fd3b (feat(viperchat): release 4.16.12-viper.24 with conversation and media improvements)
     <PushNotificationBanner :account-id="currentAccountId" />
 
     <p

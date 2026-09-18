@@ -15,10 +15,9 @@ import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
 // Custom Kanban Components
 import KanbanCard from './components/KanbanCard.vue';
 import PipelineSettingsModal from './components/PipelineSettingsModal.vue';
+import CreateDealModal from '../conversation/contact/CreateDealModal.vue';
 
 // Config Storage Helper
-import conversationApi from 'dashboard/api/inbox/conversation';
-import ConversationApi from 'dashboard/api/conversations';
 import { KanbanConfigHelper } from './helpers/kanbanConfig';
 
 const { t } = useI18n();
@@ -33,7 +32,7 @@ const configLabelId = ref(null);
 const searchQuery = ref('');
 const pipelineSearchQuery = ref('');
 const filterAgentId = ref('');
-const filterInboxId = ref('');
+const filterStatus = ref('');
 const filterPriority = ref('');
 const sortBy = ref('newest');
 const showSortDropdown = ref(false);
@@ -42,14 +41,16 @@ const showSortLabel = ref('Mais recente');
 // Modals
 const showSettingsModal = ref(false);
 const activeEditingPipeline = ref(null);
-const showAddCardPopoverId = ref(null); // ID of the column where "+ Adicionar tarefa" is open
+const showDealModal = ref(false);
+const dealModalStageId = ref(null);
+const dealModalPipelineId = ref(null);
+const dealModalContactId = ref(null);
+const dealModalDeal = ref(null);
 
 // Load core Chatwoot resources
 const allAgents = computed(() => store.getters['agents/getAgents'] || []);
 const allInboxes = computed(() => store.getters['inboxes/getInboxes'] || []);
-const allConversations = computed(
-  () => store.getters.getAllConversations || []
-);
+const allDeals = computed(() => store.getters['deals/getAllDeals'] || []);
 
 // Active pipeline
 const activePipeline = computed(() => {
@@ -66,11 +67,10 @@ const loadKanbanConfig = async () => {
     fullConfig.value = config;
     configLabelId.value = labelId;
 
-    const pipelineId = Number(route.params.pipelineId || route.query.pipeline_id);
-    if (
-      pipelineId &&
-      config.pipelines.some(p => p.id === pipelineId)
-    ) {
+    const pipelineId = Number(
+      route.params.pipelineId || route.query.pipeline_id
+    );
+    if (pipelineId && config.pipelines.some(p => p.id === pipelineId)) {
       activePipelineId.value = pipelineId;
     } else {
       activePipelineId.value = null;
@@ -100,16 +100,21 @@ const selectPipeline = pipeline => {
   });
 };
 
-const getStageLeadsCount = stage => {
-  return allConversations.value.filter(c => c.kanban_stage === stage.id).length;
+const getDealsForPipeline = pipeline => {
+  if (!pipeline) return [];
+  return allDeals.value.filter(
+    d => String(d.pipeline_id) === String(pipeline.id)
+  );
+};
+
+const getStageLeadsCount = (stage, pipeline) => {
+  return getDealsForPipeline(pipeline).filter(
+    d => String(d.stage_id) === String(stage.id)
+  ).length;
 };
 
 const getPipelineTotalLeads = pipeline => {
-  let count = 0;
-  pipeline.stages.forEach(stage => {
-    count += getStageLeadsCount(stage);
-  });
-  return count;
+  return getDealsForPipeline(pipeline).length;
 };
 
 const filteredPipelines = computed(() => {
@@ -123,13 +128,10 @@ const filteredPipelines = computed(() => {
 });
 
 const getPipelineUniqueAgents = pipeline => {
-  const stageIds = pipeline.stages.map(s => s.id);
-  const pipelineConversations = allConversations.value.filter(c =>
-    stageIds.includes(c.kanban_stage)
-  );
+  const pipelineDeals = getDealsForPipeline(pipeline);
   const agentsMap = new Map();
-  pipelineConversations.forEach(c => {
-    const assignee = c.meta?.assignee;
+  pipelineDeals.forEach(deal => {
+    const assignee = deal.user;
     if (assignee && assignee.id) {
       agentsMap.set(assignee.id, assignee);
     }
@@ -138,13 +140,15 @@ const getPipelineUniqueAgents = pipeline => {
 };
 
 const getPipelineUniqueInboxes = pipeline => {
-  const stageIds = pipeline.stages.map(s => s.id);
-  const pipelineConversations = allConversations.value.filter(c =>
-    stageIds.includes(c.kanban_stage)
-  );
+  const allConvs = store.getters.getAllConversations || [];
+  const pipelineDeals = getDealsForPipeline(pipeline);
   const inboxesMap = new Map();
-  pipelineConversations.forEach(c => {
-    const inboxId = c.inbox_id;
+  pipelineDeals.forEach(deal => {
+    if (!deal.conversation_id) return;
+    const conv = allConvs.find(
+      c => Number(c.id) === Number(deal.conversation_id)
+    );
+    const inboxId = conv?.inbox_id;
     if (inboxId) {
       const inbox = allInboxes.value.find(i => i.id === inboxId);
       if (inbox) inboxesMap.set(inboxId, inbox);
@@ -154,66 +158,41 @@ const getPipelineUniqueInboxes = pipeline => {
 };
 
 import { getChannelMeta } from 'dashboard/helper/channelMeta.js';
-import {
-  KanbanAutomations,
-  triggerStageTypebot,
-} from './helpers/kanbanAutomations';
+import { KanbanAutomations } from './helpers/kanbanAutomations';
 const getInboxChannelMeta = inbox => getChannelMeta(inbox.channel_type);
 
 // Dashboard KPI computed
 const pipelineStats = computed(() => {
   if (!activePipeline.value) return null;
-  const stageIds = activePipeline.value.stages.map(s => s.id);
-  const convs = allConversations.value.filter(
-    c => c.kanban_stage && stageIds.includes(c.kanban_stage)
-  );
-  const total = convs.length;
-  const open = convs.filter(c => c.status === 'open').length;
-  const resolved = convs.filter(c => c.status === 'resolved').length;
+  const pipelineDeals = getDealsForPipeline(activePipeline.value);
+  const total = pipelineDeals.length;
+  const open = pipelineDeals.filter(d =>
+    ['open', 'in_progress'].includes(d.status)
+  ).length;
+  const won = pipelineDeals.filter(d => d.status === 'won').length;
+  const lost = pipelineDeals.filter(d => d.status === 'lost').length;
 
   const stageDistribution = activePipeline.value.stages.map(stage => {
-    const count = convs.filter(c => c.kanban_stage === stage.id).length;
+    const count = pipelineDeals.filter(
+      d => String(d.stage_id) === String(stage.id)
+    ).length;
     return { stage, count, percentage: total > 0 ? (count / total) * 100 : 0 };
   });
 
-  return { total, open, resolved, stageDistribution };
+  return { total, open, won, lost, stageDistribution };
 });
 
-const isLoadingConversations = ref(true);
 const isLoading = ref(true);
-
-const fetchAllConversationsForKanban = async () => {
-  isLoadingConversations.value = true;
-  try {
-    const { data } = await conversationApi.get({
-      status: 'all',
-      page: 1,
-      perPage: 500,
-    });
-    if (data?.data?.payload) {
-      store.commit('SET_ALL_CONVERSATION', data.data.payload);
-    }
-  } catch {
-    store.dispatch('fetchAllConversations');
-  } finally {
-    isLoadingConversations.value = false;
-  }
-};
-
-const allDeals = computed(() => store.getters['deals/getAllDeals'] || []);
 
 const fetchKanbanData = async () => {
   isLoading.value = true;
   try {
-    const accountId = Number(route.params.accountId);
-    const pipelineId = Number(route.params.pipelineId || route.query.pipeline_id);
-
     await Promise.all([
-      fetchAllConversationsForKanban(),
       store.dispatch('deals/fetchDeals'),
       store.dispatch('labels/get'),
       store.dispatch('inboxes/get'),
       store.dispatch('agents/get'),
+      store.dispatch('attributes/get'),
       loadKanbanConfig(),
     ]);
   } catch (err) {
@@ -237,42 +216,65 @@ onBeforeUnmount(() => {
   }
 });
 
-// Filtered conversations based on Search, Agent, and Inbox select
-const filteredConversations = computed(() => {
-  let chats = [...allConversations.value];
+// Filtered Deals based on Search, Agent, Status and Priority selects
+const filteredDeals = computed(() => {
+  let deals = [...allDeals.value];
 
-  // 1. Text Search (ID, customer name, message text)
+  // 1. Text Search (Deal title, contact name)
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.toLowerCase().trim();
-    chats = chats.filter(c => {
-      const name = (c.meta?.sender?.name || '').toLowerCase();
-      const lastMsg = (
-        c.last_non_activity_message?.content || ''
-      ).toLowerCase();
-      const dispId = String(c.display_id || c.id);
-      return name.includes(q) || lastMsg.includes(q) || dispId.includes(q);
+    deals = deals.filter(d => {
+      const title = (d.title || '').toLowerCase();
+      const contactName = (d.contact?.name || '').toLowerCase();
+      const dispId = String(d.id);
+      return title.includes(q) || contactName.includes(q) || dispId.includes(q);
     });
   }
 
-  // 2. Agent Filter
+  // 2. Agent Filter (Responsável do Negócio)
   if (filterAgentId.value) {
     const agentIdNum = Number(filterAgentId.value);
-    chats = chats.filter(c => c.meta?.assignee?.id === agentIdNum);
+    deals = deals.filter(d => Number(d.user_id) === agentIdNum);
   }
 
-  // 3. Inbox Filter
-  if (filterInboxId.value) {
-    const inboxIdNum = Number(filterInboxId.value);
-    chats = chats.filter(c => c.inbox_id === inboxIdNum);
+  // 3. Status Filter
+  if (filterStatus.value) {
+    deals = deals.filter(d => d.status === filterStatus.value);
   }
 
-  // 4. Priority Filter
+  // 4. Priority Filter (custom attribute)
   if (filterPriority.value) {
-    chats = chats.filter(c => c.priority === filterPriority.value);
+    deals = deals.filter(
+      d => d.custom_attributes?.priority === filterPriority.value
+    );
   }
 
-  return chats;
+  return deals;
 });
+
+const sortDeals = deals => {
+  const sorted = [...deals];
+  switch (sortBy.value) {
+    case 'oldest':
+      sorted.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
+      break;
+    case 'value':
+      sorted.sort((a, b) => Number(b.value || 0) - Number(a.value || 0));
+      break;
+    case 'priority': {
+      const order = { urgent: 0, high: 1, medium: 2, low: 3 };
+      sorted.sort(
+        (a, b) =>
+          (order[a.custom_attributes?.priority] ?? 99) -
+          (order[b.custom_attributes?.priority] ?? 99)
+      );
+      break;
+    }
+    default:
+      sorted.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+  }
+  return sorted;
+};
 
 // Vue Draggable lists map
 const columnsCardsMap = ref({});
@@ -286,27 +288,13 @@ const syncColumns = () => {
     newMap[stage.id] = [];
   });
 
-  // 1. Map Deals into matching pipeline stages
-  const dealsForPipeline = allDeals.value.filter(
+  const dealsForPipeline = filteredDeals.value.filter(
     d => String(d.pipeline_id) === String(activePipeline.value.id)
   );
 
-  dealsForPipeline.forEach(deal => {
+  sortDeals(dealsForPipeline).forEach(deal => {
     if (newMap[deal.stage_id]) {
       newMap[deal.stage_id].push(deal);
-    }
-  });
-
-  // 2. Map conversations with kanban_stage if not already represented by a deal
-  const chats = [...filteredConversations.value];
-  chats.forEach(conversation => {
-    if (conversation.kanban_stage && newMap[conversation.kanban_stage]) {
-      const alreadyHasDeal = dealsForPipeline.some(
-        d => Number(d.conversation_id) === Number(conversation.id)
-      );
-      if (!alreadyHasDeal) {
-        newMap[conversation.kanban_stage].push(conversation);
-      }
     }
   });
 
@@ -315,9 +303,9 @@ const syncColumns = () => {
 
 let skipColumnSync = false;
 
-// Sync lists when chats, deals, active pipeline, or loading state modifies
+// Sync lists when deals, active pipeline, or loading state modifies
 watch(
-  [filteredConversations, allDeals, activePipeline, isLoading],
+  [filteredDeals, activePipeline, isLoading],
   () => {
     if (skipColumnSync) return;
     syncColumns();
@@ -356,59 +344,71 @@ const onDragEnd = event => {
 
 // Drag and drop changes handler
 const onCardDragChange = async (event, targetStage) => {
-  if (event.added) {
-    const item = event.added.element;
-    skipColumnSync = true;
+  if (!event.added) return;
+  const item = event.added.element;
+  skipColumnSync = true;
 
-    try {
-      if (item.title && item.stage_id) {
-        // It's a Deal! Update deal's stage_id
-        await store.dispatch('deals/updateDeal', {
-          id: item.id,
-          stage_id: targetStage.id,
-          pipeline_id: activePipeline.value.id,
-        });
-      } else {
-        // It's a Conversation!
-        triggerStageTypebot(item, targetStage);
-        await ConversationApi.update(item.id, {
-          kanban_stage: targetStage.id,
-        });
-        store.dispatch('updateConversation', {
-          id: item.id,
-          kanban_stage: targetStage.id,
-        });
-      }
+  try {
+    let status = item.status;
+    if (targetStage.is_won) status = 'won';
+    else if (targetStage.is_lost) status = 'lost';
 
-      if (
-        activePipeline.value.automations?.auto_resolve_on_won_lost &&
-        (targetStage.is_won || targetStage.is_lost) &&
-        item.conversation_id
-      ) {
-        await store.dispatch('toggleStatus', {
-          conversationId: item.conversation_id || item.id,
-          status: 'resolved',
-        });
-      }
-    } catch (err) {
-      console.error('Failed to update stage via drag:', err);
-      useAlert(err.response?.data?.error || 'Erro ao mover card');
-    } finally {
-      skipColumnSync = false;
+    await store.dispatch('deals/updateDeal', {
+      id: item.id,
+      stage_id: targetStage.id,
+      pipeline_id: activePipeline.value.id,
+      status,
+    });
+
+    if (
+      activePipeline.value.automations?.auto_resolve_on_won_lost &&
+      (targetStage.is_won || targetStage.is_lost) &&
+      item.conversation_id
+    ) {
+      await store.dispatch('toggleStatus', {
+        conversationId: item.conversation_id,
+        status: 'resolved',
+      });
     }
+  } catch (err) {
+    console.error('Failed to update stage via drag:', err);
+    useAlert(err.response?.data?.error || 'Erro ao mover card');
+  } finally {
+    skipColumnSync = false;
   }
 };
 
-// Quick Resolve action inside the card
-const resolveConversation = async conversationId => {
+// Quick conclude a deal (winner stage)
+const handleDealWon = async dealId => {
   try {
-    await store.dispatch('toggleStatus', {
-      conversationId,
-      status: 'resolved',
-    });
+    await store.dispatch('deals/updateDeal', { id: dealId, status: 'won' });
   } catch (err) {
-    console.error('Failed to resolve conversation:', err);
+    console.error('Failed to conclude deal:', err);
   }
+};
+
+// Open the Deal creation/edition modal
+const openCreateDeal = (stage, contactId = null) => {
+  dealModalDeal.value = null;
+  dealModalStageId.value = stage ? String(stage.id) : null;
+  dealModalPipelineId.value = activePipeline.value
+    ? activePipeline.value.id
+    : null;
+  dealModalContactId.value = contactId;
+  showDealModal.value = true;
+};
+
+const openEditDeal = deal => {
+  dealModalDeal.value = deal;
+  showDealModal.value = true;
+};
+
+const closeDealModal = () => {
+  showDealModal.value = false;
+  dealModalDeal.value = null;
+  dealModalStageId.value = null;
+  dealModalPipelineId.value = null;
+  dealModalContactId.value = null;
 };
 
 // Open Modals for Pipeline management
@@ -482,41 +482,12 @@ const deleteActivePipeline = async () => {
   }
 };
 
-// Filter recent conversations that have NO label belonging to this pipeline stages
-const eligibleConversationsForInclusion = computed(() => {
-  if (!activePipeline.value) return [];
-
-  const stageIds = activePipeline.value.stages.map(s => s.id);
-  return allConversations.value.filter(c => {
-    const hasPipelineStage =
-      c.kanban_stage && stageIds.includes(c.kanban_stage);
-    const isOpen = c.status !== 'resolved';
-    return !hasPipelineStage && isOpen;
-  });
-});
-
-// Add task quick action: immediately assigns the conversation to the first stage
-const addConversationToStage = async (conversation, stage) => {
-  showAddCardPopoverId.value = null;
-
-  try {
-    await ConversationApi.update(conversation.id, {
-      kanban_stage: stage.id,
-    });
-    store.dispatch('updateConversation', {
-      id: conversation.id,
-      kanban_stage: stage.id,
-    });
-  } catch (err) {
-    console.error('Failed to add conversation to stage:', err);
-  }
-};
-
 // Sort handlers
 const sortOptions = [
   { value: 'newest', label: 'Mais recente' },
+  { value: 'oldest', label: 'Mais antigo' },
+  { value: 'value', label: 'Maior valor' },
   { value: 'priority', label: 'Prioridade' },
-  { value: 'due_date', label: 'Data de vencimento' },
 ];
 
 const setSort = option => {
@@ -525,59 +496,20 @@ const setSort = option => {
   showSortDropdown.value = false;
 };
 
-const handleAssign = ({ conversationId, agentId }) => {
-  store.dispatch('assignAgent', {
-    conversationId,
-    agentId,
-  });
+const handleAssign = ({ dealId, agentId }) => {
+  store.dispatch('deals/updateDeal', { id: dealId, user_id: agentId });
 };
 
-const handleRemovePipeline = async conversationId => {
+const handleRemovePipeline = async dealId => {
+  const isConfirmed = confirm(
+    t('KANBAN.CARD.DELETE_CONFIRM') || 'Remover este negócio do funil?'
+  );
+  if (!isConfirmed) return;
+
   try {
-    await ConversationApi.update(conversationId, {
-      kanban_stage: null,
-    });
-    store.dispatch('updateConversation', {
-      id: conversationId,
-      kanban_stage: null,
-    });
+    await store.dispatch('deals/deleteDeal', dealId);
   } catch (err) {
-    console.error('Failed to remove from pipeline:', err);
-  }
-};
-
-const importOpenConversations = async () => {
-  if (!activePipeline.value) return;
-
-  const stageIds = activePipeline.value.stages.map(s => s.id);
-
-  const eligible = allConversations.value.filter(c => {
-    if (c.status === 'resolved') return false;
-    if (c.kanban_stage && stageIds.includes(c.kanban_stage)) return false;
-    return true;
-  });
-
-  if (eligible.length === 0) {
-    alert('Nenhuma conversa aberta elegível para importar.');
-    return;
-  }
-
-  const firstStage = activePipeline.value.stages[0];
-  if (!firstStage) return;
-
-  const batchSize = 20;
-  for (let i = 0; i < eligible.length; i += batchSize) {
-    const batch = eligible.slice(i, i + batchSize);
-    await Promise.all(
-      batch.map(c =>
-        ConversationApi.update(c.id, { kanban_stage: firstStage.id }).then(() =>
-          store.dispatch('updateConversation', {
-            id: c.id,
-            kanban_stage: firstStage.id,
-          })
-        )
-      )
-    );
+    console.error('Failed to remove deal from pipeline:', err);
   }
 };
 </script>
@@ -697,7 +629,7 @@ const importOpenConversations = async () => {
               />
               <span>{{ stage.title }}</span>
               <span class="text-slate-500 font-bold ml-0.5">{{
-                getStageLeadsCount(stage)
+                getStageLeadsCount(stage, p)
               }}</span>
             </div>
           </div>
@@ -802,25 +734,22 @@ const importOpenConversations = async () => {
             </span>
           </div>
 
-          <!-- Filter Inboxes (Compact & Premium) -->
+          <!-- Filter Status (Negócios abertos/ganhos/perdidos) -->
           <div class="relative">
             <select
-              v-model="filterInboxId"
+              v-model="filterStatus"
               class="pl-7 pr-7 py-1.5 rounded-xl border border-slate-850 bg-slate-900 text-slate-300 text-xs font-semibold outline-none cursor-pointer focus:border-blue-500 appearance-none min-w-[130px]"
             >
-              <option value="">Todas as caixas</option>
-              <option
-                v-for="inbox in allInboxes"
-                :key="inbox.id"
-                :value="inbox.id"
-              >
-                {{ inbox.name }}
-              </option>
+              <option value="">Todos os status</option>
+              <option value="open">Aberto</option>
+              <option value="in_progress">Em andamento</option>
+              <option value="won">Ganho</option>
+              <option value="lost">Perdido</option>
             </select>
             <span
               class="absolute left-2.5 top-2 text-slate-500 pointer-events-none"
             >
-              <Icon icon="i-lucide-inbox" class="size-3.5" />
+              <Icon icon="i-lucide-chart-pie" class="size-3.5" />
             </span>
             <span
               class="absolute right-2.5 top-2.5 text-slate-500 pointer-events-none"
@@ -883,16 +812,6 @@ const importOpenConversations = async () => {
             </div>
           </div>
 
-          <!-- Import conversations button -->
-          <button
-            type="button"
-            class="p-1.5 border border-slate-850 hover:border-slate-800 hover:bg-slate-900/50 rounded-xl text-slate-400 hover:text-slate-200 transition-all"
-            title="Importar conversas abertas"
-            @click="importOpenConversations"
-          >
-            <Icon icon="i-lucide-download" class="size-3.5 shrink-0" />
-          </button>
-
           <!-- Edit pipeline settings gear -->
           <button
             type="button"
@@ -903,16 +822,14 @@ const importOpenConversations = async () => {
             <Icon icon="i-lucide-settings" class="size-3.5 shrink-0" />
           </button>
 
-          <!-- Add Task Button (Blue block) -->
+          <!-- Add Deal Button (Blue block) -->
           <Button
             blue
             class="flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-xl shrink-0"
-            @click="
-              showAddCardPopoverId = activePipeline?.stages[0]?.id || null
-            "
+            @click="openCreateDeal()"
           >
             <Icon icon="i-lucide-plus" class="size-3.5" />
-            Adicionar tarefa
+            Adicionar Negócio
           </Button>
         </div>
       </header>
@@ -925,7 +842,9 @@ const importOpenConversations = async () => {
         <div class="flex items-center gap-2">
           <span
             class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider"
-            >Total</span>
+          >
+            Total
+          </span>
           <span class="text-sm font-bold text-slate-100">{{
             pipelineStats.total
           }}</span>
@@ -935,18 +854,22 @@ const importOpenConversations = async () => {
           <span class="size-2 rounded-full bg-emerald-500" />
           <span
             class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider"
-            >Abertos</span>
+          >
+            Ganhos
+          </span>
           <span class="text-sm font-bold text-emerald-400">{{
-            pipelineStats.open
+            pipelineStats.won
           }}</span>
         </div>
         <div class="flex items-center gap-2">
-          <span class="size-2 rounded-full bg-slate-600" />
+          <span class="size-2 rounded-full bg-rose-500" />
           <span
             class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider"
-            >Resolvidos</span>
+          >
+            Perdidos
+          </span>
           <span class="text-sm font-bold text-slate-400">{{
-            pipelineStats.resolved
+            pipelineStats.lost
           }}</span>
         </div>
         <div class="w-px h-4 bg-slate-800" />
@@ -1002,119 +925,77 @@ const importOpenConversations = async () => {
             :key="stage.id"
             class="group/col flex flex-col flex-1 min-w-[280px] max-w-[550px] shrink-0 bg-slate-900/40 border border-slate-900 rounded-2xl overflow-hidden hover:border-slate-850 transition"
           >
-          <!-- Column Header Info (Vibrant Full-Width Solid Colored Header as in Image 1) -->
-          <div
-            class="flex items-center justify-between px-4 py-3 shrink-0 text-white rounded-t-2xl border-b border-slate-950/40"
-            :style="{ backgroundColor: stage.color || '#3b82f6' }"
-          >
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="text-xs font-bold text-white truncate">{{
-                stage.title
-              }}</span>
-
-              <!-- Total Leads Counter Badge -->
-              <span
-                class="px-1.5 py-0.5 rounded-full bg-black/25 text-[10px] font-bold text-white/95"
-              >
-                {{ columnsCardsMap[stage.id]?.length || 0 }}
-              </span>
-            </div>
-
-            <div class="flex items-center gap-2">
-              <!-- Stage Add Card Button -->
-              <button
-                type="button"
-                class="text-white/80 hover:text-white transition-colors"
-                title="Adicionar tarefa"
-                @click="showAddCardPopoverId = stage.id"
-              >
-                <Icon icon="i-lucide-plus" class="size-4" />
-              </button>
-            </div>
-          </div>
-
-          <!-- Draggable Cards Container -->
-          <div
-            class="flex-1 overflow-y-auto px-3.5 py-4 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent"
-          >
-            <Draggable
-              v-model="columnsCardsMap[stage.id]"
-              group="kanban-conversations"
-              item-key="id"
-              animation="200"
-              class="flex flex-col gap-3.5 min-h-[300px] h-full"
-              @change="onCardDragChange($event, stage)"
-              @start="onDragStart"
-              @end="onDragEnd"
-            >
-              <template #item="{ element }">
-                <KanbanCard
-                  :deal="element.stage_id ? element : null"
-                  :conversation="element.stage_id ? (element.conversation || {}) : element"
-                  :pipeline-agents="activePipeline?.agents || []"
-                  @resolve="resolveConversation"
-                  @assign="handleAssign"
-                  @remove-pipeline="handleRemovePipeline"
-                />
-              </template>
-            </Draggable>
-          </div>
-
-          <!-- "+ Adicionar tarefa" Button & Popover -->
-          <div class="p-3 border-t border-slate-900/40 shrink-0 relative">
-            <button
-              type="button"
-              class="w-full py-2 px-3 hover:bg-slate-900/50 rounded-lg text-slate-400 hover:text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors border border-slate-900"
-              @click="
-                showAddCardPopoverId =
-                  showAddCardPopoverId === stage.id ? null : stage.id
-              "
-            >
-              <Icon icon="i-lucide-plus" class="size-4 shrink-0" />
-              {{ t('KANBAN.HEADER.ADD_TASK') }}
-            </button>
-
-            <!-- Add lead popover drop list -->
+            <!-- Column Header Info (Vibrant Full-Width Solid Colored Header as in Image 1) -->
             <div
-              v-if="showAddCardPopoverId === stage.id"
-              class="absolute bottom-12 left-2 right-2 flex flex-col max-h-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl overflow-y-auto py-1.5 z-40 animate-in fade-in slide-in-from-bottom-2"
+              class="flex items-center justify-between px-4 py-3 shrink-0 text-white rounded-t-2xl border-b border-slate-950/40"
+              :style="{ backgroundColor: stage.color || '#3b82f6' }"
             >
-              <div
-                class="px-3 py-1.5 border-b border-slate-800 text-[10px] uppercase font-bold text-slate-500"
-              >
-                Chats recentes sem funil
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="text-xs font-bold text-white truncate">{{
+                  stage.title
+                }}</span>
+
+                <!-- Total Leads Counter Badge -->
+                <span
+                  class="px-1.5 py-0.5 rounded-full bg-black/25 text-[10px] font-bold text-white/95"
+                >
+                  {{ columnsCardsMap[stage.id]?.length || 0 }}
+                </span>
               </div>
 
-              <button
-                v-for="conv in eligibleConversationsForInclusion"
-                :key="conv.id"
-                type="button"
-                class="px-3 py-2 text-left hover:bg-slate-800 text-slate-200 transition-colors flex items-center gap-2"
-                @click="addConversationToStage(conv, stage)"
-              >
-                <Thumbnail
-                  :src="conv.meta?.sender?.thumbnail"
-                  :username="conv.meta?.sender?.name || 'Cliente'"
-                  size="20px"
-                  class="shrink-0"
-                />
-                <div class="flex flex-col min-w-0">
-                  <span class="text-xs font-semibold truncate">{{
-                    conv.meta?.sender?.name || 'Cliente'
-                  }}</span>
-                  <span class="text-[9px] text-slate-500 font-mono">#{{ conv.display_id || conv.id }}</span>
-                </div>
-              </button>
-
-              <div
-                v-if="eligibleConversationsForInclusion.length === 0"
-                class="px-4 py-6 text-center text-xs text-slate-500 font-medium leading-relaxed"
-              >
-                Nenhuma conversa recente elegível encontrada.
+              <div class="flex items-center gap-2">
+                <!-- Stage Add Deal Button -->
+                <button
+                  type="button"
+                  class="text-white/80 hover:text-white transition-colors"
+                  title="Adicionar negócio"
+                  @click="openCreateDeal(stage)"
+                >
+                  <Icon icon="i-lucide-plus" class="size-4" />
+                </button>
               </div>
             </div>
+
+            <!-- Draggable Cards Container -->
+            <div
+              class="flex-1 overflow-y-auto px-3.5 py-4 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent"
+            >
+              <Draggable
+                v-model="columnsCardsMap[stage.id]"
+                group="kanban-deals"
+                item-key="id"
+                animation="200"
+                class="flex flex-col gap-3.5 min-h-[300px] h-full"
+                @change="onCardDragChange($event, stage)"
+                @start="onDragStart"
+                @end="onDragEnd"
+              >
+                <template #item="{ element }">
+                  <KanbanCard
+                    :deal="element"
+                    :conversation="element.conversation || {}"
+                    :pipeline-agents="activePipeline?.agents || []"
+                    @edit="openEditDeal"
+                    @won="handleDealWon"
+                    @assign="handleAssign"
+                    @remove-pipeline="handleRemovePipeline"
+                  />
+                </template>
+              </Draggable>
+            </div>
+
+            <!-- "+ Adicionar Negócio" Button -->
+            <div class="p-3 border-t border-slate-900/40 shrink-0">
+              <button
+                type="button"
+                class="w-full py-2 px-3 hover:bg-slate-900/50 rounded-lg text-slate-400 hover:text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors border border-slate-900"
+                @click="openCreateDeal(stage)"
+              >
+                <Icon icon="i-lucide-plus" class="size-4 shrink-0" />
+                Adicionar Negócio
+              </button>
+            </div>
           </div>
-        </div>
         </template>
       </main>
     </template>
@@ -1129,6 +1010,17 @@ const importOpenConversations = async () => {
       @close="closeSettingsModal"
       @save="savePipelineConfig"
       @delete="deleteActivePipeline"
+    />
+
+    <!-- Create/Edit Deal Modal -->
+    <CreateDealModal
+      :show="showDealModal"
+      :contact-id="dealModalContactId"
+      :initial-pipeline-id="dealModalPipelineId"
+      :initial-stage-id="dealModalStageId"
+      :deal="dealModalDeal"
+      @close="closeDealModal"
+      @saved="closeDealModal"
     />
   </div>
 </template>

@@ -9,6 +9,7 @@ json.custom_attributes deal.custom_attributes || {}
 json.account_id deal.account_id
 json.contact_id deal.contact_id
 json.conversation_id deal.conversation_id
+json.user_id deal.user_id
 json.created_at deal.created_at.to_i
 json.updated_at deal.updated_at.to_i
 
@@ -21,3 +22,13 @@ if deal.contact.present?
     json.thumbnail deal.contact.avatar_url
   end
 end
+
+if deal.user.present?
+  json.user do
+    json.id deal.user.id
+    json.name deal.user.name
+    json.email deal.user.email
+    json.thumbnail deal.user.avatar_url
+  end
+end
+

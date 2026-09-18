@@ -15,7 +15,9 @@ export default {
     getAllDeals: state => state.deals,
     getDealsByContactId: state => contactId => {
       if (!contactId) return [];
-      return state.deals.filter(d => Number(d.contact_id) === Number(contactId));
+      return state.deals.filter(
+        d => Number(d.contact_id) === Number(contactId)
+      );
     },
     getDealsByPipeline: state => pipelineId => {
       if (!pipelineId) return state.deals;

@@ -22,7 +22,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['click', 'resolve', 'assign', 'removePipeline']);
+const emit = defineEmits(['edit', 'won', 'assign', 'removePipeline']);
 
 const { t } = useI18n();
 const store = useStore();
@@ -44,25 +44,91 @@ const filteredAgents = computed(() => {
   return allAgents.value;
 });
 
-// Online indicator
-const isOnline = computed(() => {
+// ---------- Deal data ----------
+const dealTitle = computed(() => {
   return (
-    props.conversation.meta?.sender?.availability_status === 'online' ||
-    props.conversation.meta?.sender?.online === true
+    props.deal?.title ||
+    props.conversation?.group_title ||
+    props.conversation?.title ||
+    'Negócio sem título'
   );
 });
 
-// Format Creation Time Tooltip
-const exactCreationTime = computed(() => {
-  const dateVal = props.conversation.created_at || props.conversation.timestamp;
-  if (!dateVal) return '';
-  const d = new Date(dateVal * 1000 || dateVal);
-  return `Criado em ${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR')}`;
+const contactName = computed(() => {
+  return (
+    props.deal?.contact?.name ||
+    props.conversation?.meta?.sender?.name ||
+    'Cliente'
+  );
 });
 
-// Custom timeago formatter (English/Portuguese abbreviated)
+const contactThumbnail = computed(() => {
+  return (
+    props.deal?.contact?.thumbnail ||
+    props.conversation?.meta?.sender?.thumbnail
+  );
+});
+
+const dealValueFormatted = computed(() => {
+  if (props.deal?.formatted_value) return props.deal.formatted_value;
+  if (props.deal?.value !== undefined && props.deal?.value !== null) {
+    return `R$ ${Number(props.deal.value).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+    })}`;
+  }
+  return null;
+});
+
+const dealStatusMeta = computed(() => {
+  const status = props.deal?.status || 'open';
+  switch (status) {
+    case 'won':
+      return {
+        label: 'Ganho',
+        class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+      };
+    case 'lost':
+      return {
+        label: 'Perdido',
+        class: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
+      };
+    case 'in_progress':
+      return {
+        label: 'Em andamento',
+        class: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+      };
+    default:
+      return {
+        label: 'Aberto',
+        class: 'bg-sky-500/10 text-sky-400 border-sky-500/30',
+      };
+  }
+});
+
+const cardCustomAttrDefs = computed(() => {
+  const dealDefs =
+    store.getters['attributes/getAttributesByModel']('deal_attribute') || [];
+  return dealDefs.filter(def => def.show_on_kanban_card === true);
+});
+
+const customAttributesEntries = computed(() => {
+  const attrs = props.deal?.custom_attributes || {};
+  const entries = Object.entries(attrs).filter(
+    ([, val]) => val !== null && val !== undefined && val !== ''
+  );
+  if (cardCustomAttrDefs.value.length === 0) return entries;
+  const allowedKeys = cardCustomAttrDefs.value.map(d => d.attribute_key);
+  return entries.filter(([key]) => allowedKeys.includes(key));
+});
+
+const getCustomAttributeLabel = key => {
+  const def = cardCustomAttrDefs.value.find(d => d.attribute_key === key);
+  return def ? def.attribute_display_name : key;
+};
+
+// ---------- Timestamps ----------
 const timeAgo = computed(() => {
-  const timeVal = props.conversation.created_at || props.conversation.timestamp;
+  const timeVal = props.deal?.created_at;
   if (!timeVal) return '';
   const date = new Date(timeVal * 1000 || timeVal);
   const now = new Date();
@@ -77,108 +143,23 @@ const timeAgo = computed(() => {
   return `${diffDays}d`;
 });
 
-// Time badge for card: shows "Atrasado", "Amanhã", or timeago
-const timeBadge = computed(() => {
-  // First check due date for Atrasado/Amanhã
-  const dVal = dueDateValue.value;
-  if (dVal) {
-    const dueDate = new Date(dVal);
-    const today = new Date();
-    const dDate = new Date(
-      dueDate.getFullYear(),
-      dueDate.getMonth(),
-      dueDate.getDate()
-    );
-    const tDate = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate()
-    );
-    const diffDays = Math.floor((dDate - tDate) / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) {
-      return {
-        label: 'Atrasado',
-        class: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-      };
-    }
-    if (diffDays === 1) {
-      return {
-        label: 'Amanhã',
-        class: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-      };
-    }
-    if (diffDays === 0) {
-      return {
-        label: 'Hoje',
-        class: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-      };
-    }
-  }
-
-  // Otherwise show time since creation
-  const ta = timeAgo.value;
-  if (!ta) return null;
-  return {
-    label: ta,
-    class: 'bg-slate-800 text-slate-400 border-slate-700/50',
-  };
-});
-
-const formattedTimestamp = computed(() => {
-  const timeVal =
-    props.conversation.last_activity_at || props.conversation.timestamp;
-  if (!timeVal) return null;
-  const date = new Date(timeVal * 1000 || timeVal);
-  const now = new Date();
-  const diffMs = now - date;
-  const diffHours = Math.floor(diffMs / 3600000);
-
-  if (diffHours < 24) {
-    return {
-      text: timeAgo.value,
-      icon: 'i-lucide-clock',
-    };
-  }
-  const options = { day: 'numeric', month: 'short' };
-  return {
-    text: date.toLocaleDateString('pt-BR', options),
-    icon: 'i-lucide-calendar',
-  };
-});
-
-const messageCount = computed(() => {
-  return (
-    props.conversation.message_count || props.conversation.unread_count || 0
+// ---------- Assignee ----------
+const assignee = computed(() => {
+  const u = props.deal?.user;
+  if (u) return u;
+  const agent = allAgents.value.find(
+    a => Number(a.id) === Number(props.deal?.user_id)
   );
+  return agent || null;
 });
 
-const teamName = computed(() => {
-  return props.conversation.meta?.team?.name || null;
-});
-
-// Inbox & Channel Helpers
-const inboxId = computed(() => props.conversation.inbox_id);
-const inbox = computed(() => {
-  return store.getters['inboxes/getInbox'](inboxId.value) || {};
-});
-
-const channelType = computed(() => {
-  const ch = props.conversation.meta?.channel || inbox.value.channel_type || '';
-  return ch.toLowerCase();
-});
-
-// Priority states & helpers
-const conversationPriority = computed(() => {
-  return (
-    props.conversation.priority ||
-    props.conversation.custom_attributes?.priority ||
-    null
-  );
+// ---------- Priority & Due Date (deal custom attributes) ----------
+const dealPriority = computed(() => {
+  return props.deal?.custom_attributes?.priority || null;
 });
 
 const priorityMeta = computed(() => {
-  const p = conversationPriority.value;
+  const p = dealPriority.value;
   switch (p) {
     case 'urgent':
       return {
@@ -209,9 +190,8 @@ const priorityMeta = computed(() => {
   }
 });
 
-// Due Date Urgency Logic
 const dueDateValue = computed(() => {
-  return props.conversation.custom_attributes?.due_date || null;
+  return props.deal?.custom_attributes?.due_date || null;
 });
 
 const urgencyMeta = computed(() => {
@@ -220,8 +200,6 @@ const urgencyMeta = computed(() => {
 
   const dueDate = new Date(dVal);
   const today = new Date();
-
-  // Strip time for clean day comparison
   const dDate = new Date(
     dueDate.getFullYear(),
     dueDate.getMonth(),
@@ -232,25 +210,21 @@ const urgencyMeta = computed(() => {
     today.getMonth(),
     today.getDate()
   );
-
   const diffDays = Math.floor((dDate - tDate) / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) {
     return {
       status: 'overdue',
-      label: '⚠️ Vencido',
+      label: 'Vencido',
       badgeClass: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
       borderClass: 'border-rose-500/40 bg-rose-500/[0.02]',
-      text: dueDate.toLocaleDateString('pt-BR', {
-        day: 'numeric',
-        month: 'short',
-      }),
+      text: 'Vencido',
     };
   }
   if (diffDays === 0) {
     return {
       status: 'today',
-      label: '⚠️ Hoje',
+      label: 'Hoje',
       badgeClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
       borderClass: 'border-amber-500/40 bg-amber-500/[0.02]',
       text: 'Hoje',
@@ -258,7 +232,10 @@ const urgencyMeta = computed(() => {
   }
   return {
     status: 'future',
-    label: `📅 ${dueDate.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}`,
+    label: dueDate.toLocaleDateString('pt-BR', {
+      day: 'numeric',
+      month: 'short',
+    }),
     badgeClass: 'bg-slate-800 text-slate-400 border-slate-700/50',
     borderClass: 'border-slate-800',
     text: dueDate.toLocaleDateString('pt-BR', {
@@ -268,95 +245,96 @@ const urgencyMeta = computed(() => {
   };
 });
 
-import { getChannelMeta } from 'dashboard/helper/channelMeta.js';
-const channelMeta = computed(() => getChannelMeta(channelType.value));
-
-// Last message content
-const messageSnippet = computed(() => {
-  const msg =
-    props.conversation.last_non_activity_message ||
-    (props.conversation.messages && props.conversation.messages.length > 0
-      ? props.conversation.messages[props.conversation.messages.length - 1]
-      : null);
-  if (!msg) return 'Sem mensagens';
-  const cleanContent = msg.content || '';
-  return cleanContent.length > 60
-    ? cleanContent.substring(0, 60) + '...'
-    : cleanContent;
-});
-
-// Quick Actions Implementation
-const handleResolve = e => {
-  e.stopPropagation();
-  emit('resolve', props.conversation.id);
-};
-
-const handleAssign = (e, agentId) => {
-  e.stopPropagation();
-  showAssigneePopover.value = false;
-  emit('assign', { conversationId: props.conversation.id, agentId });
-};
-
-const handleRemovePipeline = e => {
-  e.stopPropagation();
-  showMoreMenu.value = false;
-  emit('removePipeline', props.conversation.id);
+// ---------- Actions ----------
+const updateCustomAttributes = async customAttributes => {
+  if (!props.deal?.id) return;
+  const current = { ...(props.deal.custom_attributes || {}) };
+  try {
+    await store.dispatch('deals/updateDeal', {
+      id: props.deal.id,
+      custom_attributes: { ...current, ...customAttributes },
+    });
+  } catch (err) {
+    console.error('Failed to update deal custom attributes:', err);
+  }
 };
 
 const updatePriority = async p => {
   showPriorityPopover.value = false;
-  try {
-    await store.dispatch('assignPriority', {
-      conversationId: props.conversation.id,
-      priority: p,
-    });
-  } catch (err) {
-    console.error('Failed to assign priority:', err);
-  }
+  const payload = { priority: p };
+  if (!p) delete payload.priority;
+  await updateCustomAttributes(payload);
 };
 
 const startEditDate = e => {
   e.stopPropagation();
   const dVal = dueDateValue.value;
-  if (dVal) {
-    editingDateValue.value = new Date(dVal).toISOString().split('T')[0];
-  } else {
-    editingDateValue.value = '';
-  }
+  editingDateValue.value = dVal
+    ? new Date(dVal).toISOString().split('T')[0]
+    : '';
   showDateEditor.value = true;
 };
 
 const saveDate = async () => {
   const dVal = editingDateValue.value;
-  const currentCustomAttributes = {
-    ...(props.conversation.custom_attributes || {}),
-  };
+  const payload = {};
   if (dVal) {
     const localDate = new Date(dVal + 'T00:00:00');
-    currentCustomAttributes.due_date = localDate.toISOString();
+    payload.due_date = localDate.toISOString();
   } else {
-    delete currentCustomAttributes.due_date;
+    payload.due_date = null;
   }
-  try {
-    await store.dispatch('updateCustomAttributes', {
-      conversationId: props.conversation.id,
-      customAttributes: currentCustomAttributes,
-    });
-  } catch (err) {
-    console.error('Failed to update due date:', err);
-  }
+  await updateCustomAttributes(payload);
   showDateEditor.value = false;
+};
+
+const handleAssign = (e, agentId) => {
+  e.stopPropagation();
+  showAssigneePopover.value = false;
+  emit('assign', { dealId: props.deal?.id, agentId });
+};
+
+const handleRemovePipeline = e => {
+  e.stopPropagation();
+  showMoreMenu.value = false;
+  emit('removePipeline', props.deal?.id);
+};
+
+const handleWon = e => {
+  e.stopPropagation();
+  emit('won', props.deal?.id);
+};
+
+const handleEdit = () => {
+  if (props.deal?.id) {
+    emit('edit', props.deal);
+  }
+};
+
+const router = useRouter();
+const route = useRoute();
+
+const navigateToConversation = () => {
+  const accountId =
+    route.params.accountId ||
+    props.deal?.account_id ||
+    props.conversation?.account_id ||
+    store.getters.getCurrentAccountId;
+
+  const convId = props.deal?.conversation_id || props.conversation?.id;
+  if (convId) {
+    router
+      .push({
+        name: 'inbox_conversation',
+        params: { accountId, conversation_id: convId },
+      })
+      .catch(() => {
+        router.push(`/app/accounts/${accountId}/conversations/${convId}`);
+      });
+  }
 };
 
 // Popover closing click outside
-const closePopover = () => {
-  showPriorityPopover.value = false;
-  showAssigneePopover.value = false;
-  showMoreMenu.value = false;
-  showDateEditor.value = false;
-};
-
-// Document click listener for popover
 const handleDocumentClick = e => {
   if (
     showPriorityPopover.value &&
@@ -385,120 +363,51 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('click', handleDocumentClick);
 });
-
-const router = useRouter();
-const route = useRoute();
-
-const dealTitle = computed(() => {
-  return props.deal?.title || props.conversation?.group_title || props.conversation?.title || 'Negócio sem título';
-});
-
-const contactName = computed(() => {
-  return (
-    props.deal?.contact?.name ||
-    props.conversation?.meta?.sender?.name ||
-    'Cliente'
-  );
-});
-
-const contactThumbnail = computed(() => {
-  return (
-    props.deal?.contact?.thumbnail ||
-    props.conversation?.meta?.sender?.thumbnail
-  );
-});
-
-const dealValueFormatted = computed(() => {
-  if (props.deal?.formatted_value) return props.deal.formatted_value;
-  if (props.deal?.value !== undefined && props.deal?.value !== null) {
-    return `R$ ${Number(props.deal.value).toLocaleString('pt-BR', {
-      minimumFractionDigits: 2,
-    })}`;
-  }
-  return null;
-});
-
-const customAttributesEntries = computed(() => {
-  const attrs = props.deal?.custom_attributes || props.conversation?.custom_attributes || {};
-  return Object.entries(attrs).filter(([_, val]) => val !== null && val !== undefined && val !== '');
-});
-
-const navigateToConversation = () => {
-  const accountId =
-    route.params.accountId ||
-    props.deal?.account_id ||
-    props.conversation?.account_id ||
-    store.getters.getCurrentAccountId;
-
-  const convId = props.deal?.conversation_id || props.conversation?.id;
-
-  if (convId) {
-    router.push({
-      name: 'inbox_conversation',
-      params: {
-        accountId,
-        conversation_id: convId,
-      },
-    }).catch(() => {
-      router.push(`/app/accounts/${accountId}/conversations/${convId}`);
-    });
-  } else if (props.deal?.contact_id) {
-    const allConvs = store.getters.getAllConversations || [];
-    const contactConv = allConvs.find(
-      c => Number(c.meta?.sender?.id) === Number(props.deal.contact_id)
-    );
-    if (contactConv) {
-      router.push({
-        name: 'inbox_conversation',
-        params: {
-          accountId,
-          conversation_id: contactConv.id,
-        },
-      });
-    } else {
-      router.push(`/app/accounts/${accountId}/dashboard`);
-    }
-  }
-};
-
-const openConversation = () => {
-  if (!props.conversation || !props.conversation.id) return;
-
-  emit('click', props.conversation.id);
-
-  const accountId =
-    route.params.accountId ||
-    props.conversation.account_id ||
-    store.getters.getCurrentAccountId;
-  const conversationId = props.conversation.id;
-
-  router
-    .push({
-      name: 'inbox_conversation',
-      params: {
-        accountId: accountId,
-        conversation_id: conversationId,
-      },
-    })
-    .catch(() => {
-      router.push(`/app/accounts/${accountId}/conversations/${conversationId}`);
-    });
-};
 </script>
 
 <template>
   <!-- eslint-disable vue/no-bare-strings-in-template -->
   <!-- eslint-disable @intlify/vue-i18n/no-raw-text -->
   <div
-    class="group relative flex flex-col p-3.5 rounded-xl border bg-slate-900 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 cursor-grab active:cursor-grabbing hover:border-slate-700/80"
+    class="group relative flex flex-col p-3.5 rounded-xl border bg-slate-900 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer active:cursor-grabbing"
     :class="
       urgencyMeta ? urgencyMeta.borderClass : 'border-slate-850 bg-slate-900/90'
     "
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
-    @click="openConversation"
-    @dblclick="openConversation"
+    @click="handleEdit"
   >
+    <!-- Hover Tooltip Context Preview -->
+    <div
+      v-if="isHovered && customAttributesEntries.length > 0"
+      class="absolute left-0 right-0 -bottom-2 translate-y-full z-40 bg-slate-950 border border-slate-750 shadow-2xl rounded-xl p-3 text-slate-100 text-xs animate-in fade-in slide-in-from-top-1 pointer-events-none"
+    >
+      <div
+        class="flex items-center justify-between pb-1.5 border-b border-slate-800 mb-1.5"
+      >
+        <span class="font-bold text-slate-100 truncate max-w-[200px]">{{
+          dealTitle
+        }}</span>
+        <span v-if="dealValueFormatted" class="font-bold text-emerald-400">{{
+          dealValueFormatted
+        }}</span>
+      </div>
+      <div class="text-[11px] text-slate-300 leading-relaxed">
+        <div class="space-y-0.5">
+          <span
+            v-for="[k, v] in customAttributesEntries"
+            :key="k"
+            class="block text-[10px]"
+          >
+            <strong class="text-slate-400">
+              {{ getCustomAttributeLabel(k) }}:
+            </strong>
+            {{ v }}
+          </span>
+        </div>
+      </div>
+    </div>
+
     <!-- Drag Indicator (grip dots, top-left) -->
     <div
       class="absolute top-2 left-2 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
@@ -506,7 +415,7 @@ const openConversation = () => {
       <Icon icon="i-lucide-grip-vertical" class="size-3.5" />
     </div>
 
-    <!-- Card Header: Deal Title & Value + Shortcut Button -->
+    <!-- Card Header: Deal Title & Value -->
     <div class="flex items-start justify-between w-full gap-2 pl-4">
       <div class="flex flex-col min-w-0">
         <span class="text-sm font-bold text-slate-100 truncate">
@@ -526,79 +435,42 @@ const openConversation = () => {
         </div>
       </div>
 
-      <!-- Value Badge -->
-      <span
-        v-if="dealValueFormatted"
-        class="shrink-0 px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-      >
-        {{ dealValueFormatted }}
-      </span>
+      <div class="flex flex-col items-end gap-1 shrink-0">
+        <span
+          v-if="dealValueFormatted"
+          class="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+        >
+          {{ dealValueFormatted }}
+        </span>
+        <span
+          class="px-2 py-0.5 rounded-full text-[10px] font-semibold border"
+          :class="dealStatusMeta.class"
+        >
+          {{ dealStatusMeta.label }}
+        </span>
+      </div>
     </div>
 
-    <!-- Custom Attributes / Snippet -->
-    <div v-if="customAttributesEntries.length > 0" class="flex flex-wrap gap-1 mt-2.5 pl-4">
+    <!-- Custom Attributes -->
+    <div
+      v-if="customAttributesEntries.length > 0"
+      class="flex flex-wrap gap-1 mt-2.5 pl-4"
+    >
       <span
         v-for="[key, val] in customAttributesEntries"
         :key="key"
         class="px-2 py-0.5 text-[10px] font-medium rounded bg-slate-800 text-slate-300 border border-slate-700/50"
       >
-        {{ key }}: {{ val }}
+        {{ getCustomAttributeLabel(key) }}: {{ val }}
       </span>
     </div>
-    <p
-      v-else-if="messageSnippet"
-      class="mt-2.5 pl-4 text-xs text-slate-400 font-normal leading-relaxed break-words line-clamp-2"
-    >
-      {{ messageSnippet }}
-    </p>
 
-    <!-- Shortcut to Conversation -->
-    <div class="flex items-center justify-between mt-3 pt-2 border-t border-slate-800/40 pl-4">
-      <button
-        type="button"
-        class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-colors cursor-pointer"
-        title="Abrir conversa no Chatwoot"
-        @click.stop="navigateToConversation"
-      >
-        <Icon icon="i-lucide-message-square" class="size-3.5" />
-        <span>Ir para Conversa</span>
-      </button>
-
-    <!-- Card Footer (Due Date/Priority + Timeago/Date with icons) -->
+    <!-- Shortcut to Conversation + Footer info -->
     <div
-      class="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-800/40 pl-4"
+      class="flex items-center justify-between mt-3 pt-2 border-t border-slate-800/40 pl-4"
     >
-      <!-- Left side: Due Date / Priority / Inbox / Message Count / Team -->
+      <!-- Left: due date & priority badges -->
       <div class="flex items-center gap-1.5 min-w-0">
-        <!-- Inbox Badge -->
-        <span
-          v-if="inbox && inbox.name"
-          class="px-1.5 py-0.5 bg-slate-950/60 border border-slate-800/60 text-[9px] text-slate-400 font-semibold rounded truncate max-w-[120px]"
-          :title="inbox.name"
-        >
-          {{ inbox.name }}
-        </span>
-
-        <!-- Message Count Badge -->
-        <span
-          v-if="messageCount > 0"
-          class="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-950/60 border border-slate-800/60 text-slate-400 shrink-0"
-          :title="`${messageCount} mensagens`"
-        >
-          <Icon icon="i-lucide-message-circle" class="size-3" />
-          {{ messageCount }}
-        </span>
-
-        <!-- Team Badge -->
-        <span
-          v-if="teamName"
-          class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0"
-          :title="`Time: ${teamName}`"
-        >
-          {{ teamName }}
-        </span>
-
-        <!-- Due Date Badges -->
         <div class="relative date-editor-trigger">
           <span
             v-if="urgencyMeta"
@@ -612,7 +484,7 @@ const openConversation = () => {
           <!-- Inline date editor popover -->
           <div
             v-if="showDateEditor"
-            class="absolute top-6 left-0 flex flex-col gap-1.5 bg-slate-900 border border-slate-800 shadow-xl rounded-lg p-2 z-30 min-w-[180px] animate-in fade-in slide-in-from-top-1"
+            class="absolute bottom-7 left-0 flex flex-col gap-1.5 bg-slate-900 border border-slate-800 shadow-xl rounded-lg p-2 z-30 min-w-[180px] animate-in fade-in slide-in-from-top-1"
             @click.stop
           >
             <input
@@ -648,75 +520,82 @@ const openConversation = () => {
           <Icon :icon="priorityMeta.icon" class="size-3 shrink-0" />
           {{ priorityMeta.label }}
         </span>
+
+        <span
+          v-if="timeAgo"
+          class="text-[10px] font-semibold text-slate-500 truncate"
+          title="Criado recentemente"
+        >
+          {{ timeAgo }}
+        </span>
       </div>
 
-      <!-- Right side: Last activity timestamp -->
-      <div
-        v-if="formattedTimestamp"
-        class="flex items-center gap-1 text-[10px] font-semibold text-slate-500 shrink-0"
-        title="Última atividade"
-      >
-        <Icon :icon="formattedTimestamp.icon" class="size-3" />
-        <span>{{ formattedTimestamp.text }}</span>
-      </div>
-
-      <!-- Assignee Thumbnail (Footer) -->
-      <div class="shrink-0 flex items-center relative assignee-popover-trigger">
-        <div
-          class="cursor-pointer"
-          @click.stop="showAssigneePopover = !showAssigneePopover"
+      <!-- Right: conversation shortcut + assignee -->
+      <div class="flex items-center gap-2 shrink-0">
+        <button
+          v-if="props.deal?.conversation_id || props.conversation?.id"
+          type="button"
+          class="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-colors cursor-pointer"
+          title="Abrir conversa no Chatwoot"
+          @click.stop="navigateToConversation"
         >
-          <Thumbnail
-            v-if="props.conversation.meta?.assignee"
-            :src="
-              props.conversation.meta?.assignee?.thumbnail ||
-              props.conversation.meta?.assignee?.avatar_url ||
-              ''
-            "
-            :username="props.conversation.meta?.assignee?.name || 'Agente'"
-            size="22px"
-            class="shrink-0 ring-2 ring-slate-950 rounded-full"
-            :title="props.conversation.meta?.assignee?.name"
-          />
-          <!-- Unassigned Placeholder -->
-          <div
-            v-else
-            class="size-[22px] rounded-full bg-slate-950 flex items-center justify-center border border-dashed border-slate-700 shrink-0 cursor-pointer hover:border-slate-500 transition-colors"
-            :title="t('KANBAN.CARD.NO_ASSIGNEE')"
-          >
-            <Icon icon="i-lucide-user-round" class="text-slate-600 size-3" />
-          </div>
-        </div>
+          <Icon icon="i-lucide-message-square" class="size-3" />
+          <span>Conversa</span>
+        </button>
 
-        <!-- Assignee popover -->
-        <div
-          v-if="showAssigneePopover"
-          class="absolute bottom-7 right-0 flex flex-col min-w-[140px] bg-slate-900 border border-slate-800 shadow-xl rounded-lg overflow-hidden py-1 z-30 animate-in fade-in slide-in-from-bottom-1"
-        >
+        <!-- Assignee Thumbnail -->
+        <div class="relative assignee-popover-trigger">
           <div
-            class="px-3 py-1.5 border-b border-slate-800 text-[10px] uppercase font-bold text-slate-500"
-          >
-            Atribuir para
-          </div>
-          <button
-            v-for="agent in filteredAgents"
-            :key="agent.id"
-            type="button"
-            class="px-3 py-1.5 text-xs text-left text-slate-300 hover:bg-slate-800 transition-colors flex items-center gap-2"
-            :class="{
-              'bg-emerald-500/10':
-                props.conversation.meta?.assignee?.id === agent.id,
-            }"
-            @click="handleAssign($event, agent.id)"
+            class="cursor-pointer"
+            @click.stop="showAssigneePopover = !showAssigneePopover"
           >
             <Thumbnail
-              :src="agent.thumbnail"
-              :username="agent.name"
-              size="16px"
-              class="shrink-0 rounded-full"
+              v-if="assignee"
+              :src="assignee.thumbnail || assignee.avatar_url || ''"
+              :username="assignee.name || 'Agente'"
+              size="22px"
+              class="shrink-0 ring-2 ring-slate-950 rounded-full"
+              :title="assignee.name"
             />
-            <span class="truncate">{{ agent.name }}</span>
-          </button>
+            <!-- Unassigned Placeholder -->
+            <div
+              v-else
+              class="size-[22px] rounded-full bg-slate-950 flex items-center justify-center border border-dashed border-slate-700 shrink-0 cursor-pointer hover:border-slate-500 transition-colors"
+              :title="t('KANBAN.CARD.NO_ASSIGNEE')"
+            >
+              <Icon icon="i-lucide-user-round" class="text-slate-600 size-3" />
+            </div>
+          </div>
+
+          <!-- Assignee popover -->
+          <div
+            v-if="showAssigneePopover"
+            class="absolute bottom-7 right-0 flex flex-col min-w-[140px] bg-slate-900 border border-slate-800 shadow-xl rounded-lg overflow-hidden py-1 z-30 animate-in fade-in slide-in-from-bottom-1"
+          >
+            <div
+              class="px-3 py-1.5 border-b border-slate-800 text-[10px] uppercase font-bold text-slate-500"
+            >
+              Atribuir para
+            </div>
+            <button
+              v-for="agent in filteredAgents"
+              :key="agent.id"
+              type="button"
+              class="px-3 py-1.5 text-xs text-left text-slate-300 hover:bg-slate-800 transition-colors flex items-center gap-2"
+              :class="{
+                'bg-emerald-500/10': Number(assignee?.id) === Number(agent.id),
+              }"
+              @click="handleAssign($event, agent.id)"
+            >
+              <Thumbnail
+                :src="agent.thumbnail"
+                :username="agent.name"
+                size="16px"
+                class="shrink-0 rounded-full"
+              />
+              <span class="truncate">{{ agent.name }}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -732,7 +611,7 @@ const openConversation = () => {
         <button
           type="button"
           class="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition-colors"
-          title="Alterar Prioridade"
+          title="Alterar prioridade"
           @click.stop="showPriorityPopover = !showPriorityPopover"
         >
           <Icon icon="i-lucide-flag" class="size-3.5" />
@@ -785,6 +664,16 @@ const openConversation = () => {
         </div>
       </div>
 
+      <!-- Conclude (win) quick action -->
+      <button
+        type="button"
+        class="p-1 hover:bg-emerald-500/10 rounded text-slate-400 hover:text-emerald-400 transition-colors"
+        title="Marcar como ganho"
+        @click.stop="handleWon"
+      >
+        <Icon icon="i-lucide-check" class="size-3.5" />
+      </button>
+
       <!-- "..." More options menu -->
       <div class="relative more-menu-trigger">
         <button
@@ -798,28 +687,26 @@ const openConversation = () => {
 
         <div
           v-if="showMoreMenu"
-          class="absolute top-7 right-0 flex flex-col min-w-[130px] bg-slate-900 border border-slate-800 shadow-xl rounded-lg overflow-hidden py-1 z-30 animate-in fade-in slide-in-from-top-1"
+          class="absolute top-7 right-0 flex flex-col min-w-[150px] bg-slate-900 border border-slate-800 shadow-xl rounded-lg overflow-hidden py-1 z-30 animate-in fade-in slide-in-from-top-1"
         >
+          <button
+            type="button"
+            class="px-3 py-1.5 text-xs text-left text-slate-300 hover:bg-slate-800 transition-colors flex items-center gap-1.5"
+            @click.stop="handleEdit"
+          >
+            <Icon icon="i-lucide-pencil" class="size-3 text-slate-400" />
+            Editar negócio
+          </button>
           <button
             type="button"
             class="px-3 py-1.5 text-xs text-left text-slate-300 hover:bg-slate-800 transition-colors flex items-center gap-1.5"
             @click.stop="handleRemovePipeline"
           >
-            <Icon icon="i-lucide-x-circle" class="size-3 text-rose-400" />
+            <Icon icon="i-lucide-trash-2" class="size-3 text-rose-400" />
             Remover do funil
           </button>
         </div>
       </div>
-
-      <!-- Quick Resolve (✔) Button -->
-      <button
-        type="button"
-        class="p-1 hover:bg-emerald-500/10 rounded text-slate-400 hover:text-emerald-400 transition-colors"
-        title="Resolver Conversa"
-        @click.stop="handleResolve"
-      >
-        <Icon icon="i-lucide-check" class="size-3.5" />
-      </button>
     </div>
   </div>
 </template>

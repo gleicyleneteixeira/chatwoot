@@ -8,5 +8,8 @@ json.regex_cue resource.regex_cue
 json.attribute_values resource.attribute_values
 json.attribute_model resource.attribute_model
 json.default_value resource.default_value
+json.show_on_kanban_card resource.show_on_kanban_card
+json.show_on_sidebar resource.show_on_sidebar
 json.created_at resource.created_at
 json.updated_at resource.updated_at
+

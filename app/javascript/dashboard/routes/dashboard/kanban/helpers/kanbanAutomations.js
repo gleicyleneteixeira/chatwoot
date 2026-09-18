@@ -1,6 +1,5 @@
 /* eslint-disable no-console, no-restricted-syntax, no-continue, no-await-in-loop */
 import { KanbanConfigHelper } from './kanbanConfig';
-import ConversationApi from 'dashboard/api/conversations';
 
 export const triggerStageTypebot = async (conversation, stage) => {
   if (!conversation || !stage) return;
@@ -39,7 +38,7 @@ export const triggerStageTypebot = async (conversation, stage) => {
   }
 };
 
-const assignOnlineAgent = async (store, conversationId, pipeline) => {
+const pickOnlineAgent = async (store, pipeline) => {
   const agentsList = pipeline.agents || [];
   const allAgents = store.getters['agents/getAgents'] || [];
   const onlineAgents = allAgents.filter(
@@ -51,11 +50,18 @@ const assignOnlineAgent = async (store, conversationId, pipeline) => {
       : onlineAgents;
   if (eligible.length > 0) {
     const agent = eligible[Math.floor(Math.random() * eligible.length)];
-    await store.dispatch('assignAgent', {
-      conversationId,
-      agentId: agent.id,
-    });
+    return agent.id;
   }
+  return null;
+};
+
+const findDealForConversation = (store, conversationId, pipeline) => {
+  const deals = store.getters['deals/getAllDeals'] || [];
+  return deals.find(
+    d =>
+      Number(d.conversation_id) === Number(conversationId) &&
+      String(d.pipeline_id) === String(pipeline.id)
+  );
 };
 
 export const KanbanAutomations = {
@@ -80,38 +86,71 @@ export const KanbanAutomations = {
         if (isAgentFirstMsg && pipeline.automations?.auto_create_skip_agent)
           continue;
 
-        const stageIds = pipeline.stages.map(s => s.id);
-        const hasStage =
-          conversation.kanban_stage &&
-          stageIds.includes(conversation.kanban_stage);
+        const hasDeal = findDealForConversation(
+          store,
+          conversation.id,
+          pipeline
+        );
+        if (hasDeal) continue;
 
-        if (!hasStage && pipeline.stages.length > 0) {
-          const firstStage = pipeline.stages[0];
+        const stages = pipeline.stages || [];
+        if (stages.length === 0) continue;
 
-          // Dispara Typebot antes do update para não depender da migration
-          triggerStageTypebot(conversation, firstStage);
+        const firstStage = stages[0];
+        const contact = conversation.meta?.sender || {};
 
-          try {
-            await ConversationApi.update(conversation.id, {
-              kanban_stage: firstStage.id,
-            });
-            store.dispatch('updateConversation', {
-              id: conversation.id,
-              kanban_stage: firstStage.id,
-            });
+        // Dispara Typebot antes do create para não depender do retorno
+        triggerStageTypebot(conversation, firstStage);
 
-            if (
-              pipeline.automations?.auto_assign_agent &&
-              !conversation.meta?.assignee
-            ) {
-              await assignOnlineAgent(store, conversation.id, pipeline);
-            }
-          } catch (err) {
-            console.error(
-              `Automation failed: auto_create for chat #${conversation.id}`,
-              err
-            );
-          }
+        try {
+          const agentId = pipeline.automations?.auto_assign_agent
+            ? await pickOnlineAgent(store, pipeline)
+            : null;
+
+          await store.dispatch('deals/createDeal', {
+            title:
+              contact.name ||
+              `Conversa #${conversation.display_id || conversation.id}`,
+            value: 0,
+            pipeline_id: String(pipeline.id),
+            stage_id: String(firstStage.id),
+            contact_id: Number(conversation.contact_id),
+            conversation_id: Number(conversation.id),
+            user_id: agentId,
+          });
+        } catch (err) {
+          console.error(
+            `Automation failed: auto_create deal for conversation #${conversation.id}`,
+            err
+          );
+        }
+      }
+    };
+
+    const handleAutoWinOnResolve = async (conversationId, config) => {
+      if (!conversationId) return;
+
+      for (const pipeline of config.pipelines) {
+        if (!pipeline.automations?.auto_win_on_resolve) continue;
+
+        const deal = findDealForConversation(store, conversationId, pipeline);
+        if (!deal) continue;
+
+        const wonStage = pipeline.stages.find(s => s.is_won);
+        if (!wonStage || String(deal.stage_id) === String(wonStage.id))
+          continue;
+
+        try {
+          await store.dispatch('deals/updateDeal', {
+            id: deal.id,
+            stage_id: String(wonStage.id),
+            status: 'won',
+          });
+        } catch (err) {
+          console.error(
+            `Automation failed: auto_win_on_resolve for conversation #${conversationId}`,
+            err
+          );
         }
       }
     };
@@ -137,52 +176,16 @@ export const KanbanAutomations = {
       if (type === 'UPDATE_CONVERSATION') {
         const conversation = payload;
         if (!conversation || !conversation.id) return;
-        if (conversation.status !== 'open') return;
+        if (conversation.status === 'resolved') return;
 
-        const alreadyInPipeline = config.pipelines.some(p =>
-          p.stages.some(s => s.id === conversation.kanban_stage)
-        );
-        if (alreadyInPipeline) return;
-
-        await tryAutoCreate(conversation, config);
+        await tryAutoCreate(conversation, config, false);
       }
 
       if (type === 'CHANGE_CONVERSATION_STATUS') {
         const { conversationId, status } = payload;
         if (status !== 'resolved' || !conversationId) return;
 
-        const conversation = store.getters.getConversationById(conversationId);
-        if (!conversation) return;
-
-        for (const pipeline of config.pipelines) {
-          if (!pipeline.automations?.auto_win_on_resolve) continue;
-
-          const currentStageId = conversation.kanban_stage;
-          if (!currentStageId) continue;
-
-          const currentStage = pipeline.stages.find(
-            s => s.id === currentStageId
-          );
-          if (!currentStage) continue;
-
-          const wonStage = pipeline.stages.find(s => s.is_won);
-          if (wonStage && currentStageId !== wonStage.id) {
-            try {
-              await ConversationApi.update(conversationId, {
-                kanban_stage: wonStage.id,
-              });
-              store.dispatch('updateConversation', {
-                id: conversationId,
-                kanban_stage: wonStage.id,
-              });
-            } catch (err) {
-              console.error(
-                `Automation failed: auto_win_on_resolve for chat #${conversationId}`,
-                err
-              );
-            }
-          }
-        }
+        await handleAutoWinOnResolve(conversationId, config);
       }
     });
   },

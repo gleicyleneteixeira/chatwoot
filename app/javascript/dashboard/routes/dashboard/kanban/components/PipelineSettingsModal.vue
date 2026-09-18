@@ -32,6 +32,15 @@ const emit = defineEmits(['close', 'save', 'delete']);
 const { t } = useI18n();
 const store = useStore();
 
+const availableVariables = [
+  '{{ contact.first_name }}',
+  '{{ contact.name }}',
+  '{{ deal.title }}',
+  '{{ deal.value }}',
+  '{{ deal.custom_attributes.proposta }}',
+  '{{ deal.custom_attributes.valor_liberado }}',
+];
+
 // Form states
 const pipelineId = ref(null);
 const name = ref('');
@@ -51,7 +60,6 @@ const automations = ref({
 const currentStep = ref(props.pipeline ? 'form' : 'select_model');
 
 // Load lists from store
-const allInboxes = computed(() => store.getters['inboxes/getInboxes'] || []);
 const allAgents = computed(() => store.getters['agents/getAgents'] || []);
 onMounted(() => {
   // Fetch required dependencies
@@ -203,16 +211,7 @@ const toggleLost = index => {
   if (stages.value[index].is_lost) stages.value[index].is_won = false;
 };
 
-// Toggle selections for inboxes & agents
-const toggleInbox = id => {
-  const index = inboxes.value.indexOf(id);
-  if (index > -1) {
-    inboxes.value.splice(index, 1);
-  } else {
-    inboxes.value.push(id);
-  }
-};
-
+// Toggle selections for agents
 const toggleAgent = id => {
   const index = agents.value.indexOf(id);
   if (index > -1) {
@@ -483,7 +482,8 @@ const handleSave = () => {
                         class="w-8 h-8 rounded border border-slate-700 bg-slate-900 cursor-pointer overflow-hidden p-0"
                       />
                       <span class="text-xs text-slate-400 font-mono uppercase">
-                        {{ stage.color }}</span>
+                        {{ stage.color }}
+                      </span>
                     </div>
                   </div>
                   <!-- Typebot Integration -->
@@ -513,10 +513,49 @@ const handleSave = () => {
                         class="w-full px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900 text-slate-200 text-xs focus:border-blue-500 outline-none font-mono"
                       />
                     </div>
-                    <p class="text-[9px] text-slate-500">
-                      Ao mover um lead para esta etapa, iniciará automaticamente
-                      o Typebot com os dados do contato.
-                    </p>
+                  </div>
+
+                  <!-- Mensagem Padrão de Automação (Disparo ao mover card) -->
+                  <div
+                    class="sm:col-span-2 space-y-1.5 pt-2 border-t border-slate-800"
+                  >
+                    <div class="flex items-center justify-between">
+                      <label
+                        class="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5"
+                      >
+                        <Icon
+                          icon="i-lucide-send"
+                          class="size-3 text-emerald-400"
+                        />
+                        Mensagem Padrão de Automação (Ao Mover Card)
+                      </label>
+                      <span class="text-[9px] text-slate-500">Opcional</span>
+                    </div>
+                    <textarea
+                      v-model="stage.automation_message"
+                      rows="2"
+                      placeholder="Ex: Olá {{ contact.first_name }}, seu negócio {{ deal.title }} no valor de {{ deal.value }} avançou para esta etapa..."
+                      class="w-full px-3 py-2 rounded-md border border-slate-700 bg-slate-900 text-slate-200 text-xs focus:border-blue-500 outline-none resize-none font-sans"
+                    />
+                    <div class="flex flex-wrap gap-1 pt-1">
+                      <span
+                        class="text-[9px] text-slate-500 font-semibold self-center"
+                      >
+                        Variáveis:
+                      </span>
+                      <button
+                        v-for="varTag in availableVariables"
+                        :key="varTag"
+                        type="button"
+                        class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-800 text-blue-300 hover:bg-slate-750 transition-colors border border-slate-700"
+                        @click="
+                          stage.automation_message =
+                            (stage.automation_message || '') + ' ' + varTag
+                        "
+                      >
+                        {{ varTag }}
+                      </button>
+                    </div>
                   </div>
                 </div>
 

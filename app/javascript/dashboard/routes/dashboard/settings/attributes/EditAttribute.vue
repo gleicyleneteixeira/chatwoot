@@ -34,6 +34,8 @@ export default {
       regexPattern: null,
       regexCue: null,
       regexEnabled: false,
+      showOnKanbanCard: false,
+      showOnSidebar: false,
       show: true,
       attributeKey: '',
       values: [],
@@ -120,6 +122,8 @@ export default {
       this.regexPattern = regexPattern;
       this.regexCue = this.selectedAttribute.regex_cue;
       this.regexEnabled = regexPattern != null;
+      this.showOnKanbanCard = !!this.selectedAttribute.show_on_kanban_card;
+      this.showOnSidebar = !!this.selectedAttribute.show_on_sidebar;
       this.values = this.setAttributeListValue;
     },
     async editAttributes() {
@@ -139,6 +143,8 @@ export default {
           attribute_values: this.updatedAttributeListValues,
           regex_pattern: normalizeRegexPattern(this.regexPattern),
           regex_cue: this.regexCue,
+          show_on_kanban_card: this.showOnKanbanCard,
+          show_on_sidebar: this.showOnSidebar,
         });
         this.alertMessage = this.$t('ATTRIBUTES_MGMT.EDIT.API.SUCCESS_MESSAGE');
         this.onClose();
@@ -158,6 +164,7 @@ export default {
 </script>
 
 <template>
+  <!-- eslint-disable vue/no-bare-strings-in-template -->
   <div class="flex flex-col h-auto overflow-auto">
     <woot-modal-header :header-title="pageTitle" />
     <form class="flex flex-col w-full" @submit.prevent="editAttributes">
@@ -209,6 +216,24 @@ export default {
             {{ $t('ATTRIBUTES_MGMT.ADD.FORM.TYPE.ERROR') }}
           </span>
         </label>
+
+        <!-- Display Visibility Flags -->
+        <div
+          class="flex flex-col gap-2 my-3 p-3 rounded-lg border border-n-weak bg-n-slate-1"
+        >
+          <label
+            class="flex items-center gap-2 cursor-pointer text-xs font-medium text-n-slate-12"
+          >
+            <input v-model="showOnKanbanCard" type="checkbox" />
+            Exibir no Card do Kanban
+          </label>
+          <label
+            class="flex items-center gap-2 cursor-pointer text-xs font-medium text-n-slate-12"
+          >
+            <input v-model="showOnSidebar" type="checkbox" />
+            Exibir no Painel Lateral da Conversa (Sidebar Right)
+          </label>
+        </div>
         <div v-if="isAttributeTypeList" class="mb-4">
           <label class="mb-1 block">
             {{ $t('ATTRIBUTES_MGMT.EDIT.TYPE.LIST.LABEL') }}
