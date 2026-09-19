@@ -550,7 +550,7 @@ const handleSave = () => {
                         class="px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-slate-800 text-slate-400 hover:text-blue-400 hover:bg-slate-700 transition-colors border border-slate-700"
                         @click="stage.automation_message = (stage.automation_message || '') + `{{${v}}}`"
                       >
-                        {{`{{${v}}}`}}
+                        {{ `{{${v}}}` }}
                       </button>
                     </div>
                   </div>
