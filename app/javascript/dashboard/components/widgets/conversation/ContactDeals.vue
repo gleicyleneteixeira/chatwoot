@@ -73,11 +73,20 @@ const navigateToDeal = deal => {
   }
 };
 
+import { KanbanConfigHelper } from '../../../kanban/helpers/kanbanConfig';
+
+// Import KanbanConfigHelper from the correct location
+const KanbanConfigHelper = {
+  getConfigFromStorage: () => {
+    const kanbanConfig = JSON.parse(
+      localStorage.getItem('kanban_config') || '{}'
+    );
+    return kanbanConfig.pipelines || [];
+  }
+};
+
 const getDealStageName = deal => {
-  const kanbanConfig = JSON.parse(
-    localStorage.getItem('kanban_config') || '{}'
-  );
-  const pipelines = kanbanConfig.pipelines || [];
+  const pipelines = KanbanConfigHelper.getConfigFromStorage();
   for (const pipeline of pipelines) {
     const stage = pipeline.stages?.find(s => s.id === deal.custom_attributes?.kanban_stage);
     if (stage) return stage.title;
@@ -86,10 +95,7 @@ const getDealStageName = deal => {
 };
 
 const getStageColor = deal => {
-  const kanbanConfig = JSON.parse(
-    localStorage.getItem('kanban_config') || '{}'
-  );
-  const pipelines = kanbanConfig.pipelines || [];
+  const pipelines = KanbanConfigHelper.getConfigFromStorage();
   for (const pipeline of pipelines) {
     const stage = pipeline.stages?.find(s => s.id === deal.custom_attributes?.kanban_stage);
     if (stage) return stage.color || '#3b82f6';
