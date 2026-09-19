@@ -1,5 +1,5 @@
 /* global axios */
-import ApiClient from '../ApiClient';
+import ApiClient from './ApiClient';
 
 class DealsApi extends ApiClient {
   constructor() {
